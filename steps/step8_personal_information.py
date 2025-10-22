@@ -453,6 +453,8 @@ class Step8PersonalInformation(BaseStep):
             logger.info("Filling phone number...")
             phone_number = self.passport_data.get('phone_number', '')
             if phone_number:
+                # Remove dashes from phone number
+                phone_number = phone_number.replace('-', '')
                 if not self.find_and_input_text(self.phone_number, phone_number, "phone number"):
                     logger.error("Failed to input phone number")
                     return False
