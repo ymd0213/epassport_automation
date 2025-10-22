@@ -282,6 +282,27 @@ class Step6WhatAreYouRenewing(BaseStep):
                     return False
                 time.sleep(2)
             
+            # Validate Continue button before clicking
+            logger.info("Validating Continue button...")
+            continue_button_element = self.find_element(self.continue_button, "Continue button")
+            
+            if not continue_button_element:
+                logger.error("Continue button not found")
+                return {
+                    'status': False,
+                    'code': 'CONTINUE_BUTTON_NOT_FOUND',
+                    'message': 'Continue button not found on the page'
+                }
+            
+            # Check if continue button is disabled
+            if not continue_button_element.is_enabled():
+                logger.error("Continue button is disabled")
+                return {
+                    'status': False,
+                    'code': 'CONTINUE_BUTTON_DISABLED',
+                    'message': 'Continue button is disabled - form validation failed'
+                }
+            
             # Click Continue button
             logger.info("Clicking Continue button...")
             if not self.find_and_click_button(self.continue_button, "Continue button"):
@@ -306,7 +327,11 @@ class Step6WhatAreYouRenewing(BaseStep):
                         logger.info("Found Continue button, clicking it...")
                         continue_btn.click()
                         logger.info("✅ Step 6 completed successfully - Continue button clicked")
-                        return True
+                        return {
+                            'status': True,
+                            'code': 'SUCCESS',
+                            'message': 'Step 6 completed successfully - Continue button clicked'
+                        }
                 except:
                     logger.info(f"Continue button not found on attempt {attempt + 1}")
                 
@@ -322,14 +347,41 @@ class Step6WhatAreYouRenewing(BaseStep):
                 if error_heading and "Your passport book is eligible for online renewal" in error_heading.text:
                     error_message = error_heading.text
                     logger.error(f"❌ Error found: {error_message}")
-                    return False
+                    return {
+                        'status': False,
+                        'code': 'PASSPORT_ELIGIBILITY_ERROR',
+                        'message': error_message
+                    }
             except:
                 logger.info("No specific error message found")
             
+            # Check for other common error patterns
+            try:
+                # Look for general error alert
+                error_alert = self.driver.find_element("css selector", "div.usa-alert__body")
+                if error_alert:
+                    error_message = error_alert.text.strip()
+                    logger.error(f"❌ General error found: {error_message}")
+                    return {
+                        'status': False,
+                        'code': 'GENERAL_ERROR',
+                        'message': error_message
+                    }
+            except:
+                logger.info("No general error message found")
+            
             # If we get here, no Continue button was found and no specific error message
             logger.error("❌ Your passport data is not correct - Continue button not found")
-            return False
+            return {
+                'status': False,
+                'code': 'CONTINUE_BUTTON_NOT_FOUND',
+                'message': 'Continue button not found after form submission'
+            }
             
         except Exception as e:
             logger.error(f"❌ Step 6 failed with error: {str(e)}")
-            return False
+            return {
+                'status': False,
+                'code': 'STEP6_EXCEPTION',
+                'message': f'Step 6 failed with error: {str(e)}'
+            }

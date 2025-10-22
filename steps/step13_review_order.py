@@ -93,15 +93,27 @@ class Step13ReviewOrder(BaseStep):
             logger.info("Clicking Continue button on review order page...")
             if not self.find_specific_continue_button():
                 logger.error("Failed to click Continue button")
-                return False
+                return {
+                    'status': False,
+                    'code': 'CONTINUE_BUTTON_FAILED',
+                    'message': 'Failed to click Continue button'
+                }
             
             # Small delay to allow next page to load
             time.sleep(5)
             
             logger.info("✅ Step 13 completed successfully - Review order page submitted")
-            return True
+            return {
+                'status': True,
+                'code': 'SUCCESS',
+                'message': 'Step 13 completed successfully - Review order page submitted'
+            }
             
         except Exception as e:
             logger.error(f"❌ Step 13 failed with error: {str(e)}")
-            return False
+            return {
+                'status': False,
+                'code': 'STEP13_EXCEPTION',
+                'message': f'Step 13 failed with error: {str(e)}'
+            }
 

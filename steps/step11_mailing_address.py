@@ -60,6 +60,50 @@ class Step11MailingAddress(BaseStep):
             'id': 'mailingAddress.state'
         }
     
+    def check_for_errors(self):
+        """
+        Check for error messages after button clicks
+        
+        Returns:
+            dict or None: Error data if found, None if no errors
+        """
+        try:
+            # Look for error alert body
+            error_alert = self.driver.find_element("css selector", "div.usa-alert__body")
+            if error_alert:
+                # Find all span elements with class "text-bold" inside the alert
+                try:
+                    bold_spans = error_alert.find_elements("css selector", "span.text-bold")
+                    if bold_spans:
+                        error_messages = []
+                        for span in bold_spans:
+                            if span.text.strip():
+                                error_messages.append(span.text.strip())
+                        
+                        if error_messages:
+                            error_message = ", ".join(error_messages)
+                            logger.error(f"❌ Error found: {error_message}")
+                            return {
+                                'status': False,
+                                'code': 'MAILING_ADDRESS_ERROR',
+                                'message': error_message
+                            }
+                except:
+                    # If we can't find specific bold spans, get the general error text
+                    error_text = error_alert.text.strip()
+                    if error_text:
+                        logger.error(f"❌ General error found: {error_text}")
+                        return {
+                            'status': False,
+                            'code': 'MAILING_ADDRESS_ERROR',
+                            'message': error_text
+                        }
+        except:
+            # No error alert found
+            pass
+        
+        return None
+    
     def execute(self):
         try:
             self.log_step_info()
@@ -73,6 +117,11 @@ class Step11MailingAddress(BaseStep):
                     logger.error("Failed to click Continue button")
                     return False
                 time.sleep(5)
+                
+                # Check for errors after Continue button click
+                error_result = self.check_for_errors()
+                if error_result:
+                    return error_result
             else:
                 logger.info("permanent_address_same is not 1 -> editing mailing address")
                 # Click Edit Mailing Address
@@ -80,6 +129,11 @@ class Step11MailingAddress(BaseStep):
                     logger.error("Failed to click Edit Mailing Address button")
                     return False
                 time.sleep(1)
+                
+                # Check for errors after Edit Mailing Address button click
+                error_result = self.check_for_errors()
+                if error_result:
+                    return error_result
                 
                 # Fill mailing address fields
                 addr1 = self.passport_data.get('mailing_address_1', '')
@@ -116,6 +170,11 @@ class Step11MailingAddress(BaseStep):
                     return False
                 time.sleep(10)
                 
+                # Check for errors after Add Address button click
+                error_result = self.check_for_errors()
+                if error_result:
+                    return error_result
+                
                 # Click Continue
                 if not self.find_and_click_button(self.continue_button, "Continue button"):
                     logger.error("Failed to click Continue button after Add Address")
@@ -128,7 +187,15 @@ class Step11MailingAddress(BaseStep):
                     return False
             
             logger.info("✅ Step 11 completed successfully")
-            return True
+            return {
+                'status': True,
+                'code': 'SUCCESS',
+                'message': 'Step 11 completed successfully'
+            }
         except Exception as e:
             logger.error(f"❌ Step 11 failed with error: {str(e)}")
-            return False
+            return {
+                'status': False,
+                'code': 'STEP11_EXCEPTION',
+                'message': f'Step 11 failed with error: {str(e)}'
+            }

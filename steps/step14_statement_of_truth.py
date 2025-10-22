@@ -108,7 +108,11 @@ class Step14StatementOfTruth(BaseStep):
             logger.info("Clicking checkbox wrapper on statement of truth page...")
             if not self.find_and_click_checkbox_wrapper():
                 logger.error("Failed to click checkbox wrapper")
-                return False
+                return {
+                    'status': False,
+                    'code': 'CHECKBOX_WRAPPER_FAILED',
+                    'message': 'Failed to click checkbox wrapper'
+                }
             
             time.sleep(2)  # Brief pause after clicking checkbox
             
@@ -116,15 +120,27 @@ class Step14StatementOfTruth(BaseStep):
             logger.info("Clicking Continue button on statement of truth page...")
             if not self.find_and_click_button(self.continue_button, "Continue button"):
                 logger.error("Failed to click Continue button")
-                return False
+                return {
+                    'status': False,
+                    'code': 'CONTINUE_BUTTON_FAILED',
+                    'message': 'Failed to click Continue button'
+                }
             
             # Small delay to allow next page to load
             time.sleep(5)
             
             logger.info("✅ Step 14 completed successfully - Statement of truth page submitted")
-            return True
+            return {
+                'status': True,
+                'code': 'SUCCESS',
+                'message': 'Step 14 completed successfully - Statement of truth page submitted'
+            }
             
         except Exception as e:
             logger.error(f"❌ Step 14 failed with error: {str(e)}")
-            return False
+            return {
+                'status': False,
+                'code': 'STEP14_EXCEPTION',
+                'message': f'Step 14 failed with error: {str(e)}'
+            }
 

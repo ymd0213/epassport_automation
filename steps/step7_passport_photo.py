@@ -155,17 +155,46 @@ class Step7PassportPhoto(BaseStep):
                         logger.info("Found final Continue button, clicking it...")
                         continue_btn.click()
                         logger.info("✅ Step 7 completed successfully - Final Continue button clicked")
-                        return True
+                        return {
+                            'status': True,
+                            'code': 'SUCCESS',
+                            'message': 'Step 7 completed successfully - Final Continue button clicked'
+                        }
                 except:
                     logger.info(f"Final Continue button not found on attempt {attempt + 1}")
                 
                 if attempt < 2:  # Don't sleep after the last attempt
                     time.sleep(2)
             
-            # If we get here, no final Continue button was found
+            # If we get here, no final Continue button was found - check for photo error
+            logger.info("Final Continue button not found, checking for photo error...")
+            
+            try:
+                # Look for the photo error message
+                photo_error_heading = self.driver.find_element("css selector", "h2.usa-alert__heading")
+                if photo_error_heading and "Sorry, we can't accept your photo" in photo_error_heading.text:
+                    error_message = photo_error_heading.text
+                    logger.error(f"❌ Photo error found: {error_message}")
+                    return {
+                        'status': False,
+                        'code': 'PHOTO_ERROR',
+                        'message': error_message
+                    }
+            except:
+                logger.info("No photo error message found")
+            
+            # If we get here, no final Continue button was found and no photo error
             logger.error("❌ Your passport photo is not correct - Final Continue button not found")
-            return False
+            return {
+                'status': False,
+                'code': 'CONTINUE_BUTTON_NOT_FOUND',
+                'message': 'Final Continue button not found after photo upload'
+            }
             
         except Exception as e:
             logger.error(f"❌ Step 7 failed with error: {str(e)}")
-            return False
+            return {
+                'status': False,
+                'code': 'STEP7_EXCEPTION',
+                'message': f'Step 7 failed with error: {str(e)}'
+            }

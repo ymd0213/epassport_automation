@@ -47,7 +47,11 @@ class Step5TermsAndConditions(BaseStep):
             logger.info("Clicking terms and conditions checkbox...")
             if not self.find_and_click_checkbox(self.terms_checkbox, "terms and conditions checkbox"):
                 logger.error("Failed to click terms and conditions checkbox")
-                return False
+                return {
+                    'status': False,
+                    'code': 'CHECKBOX_CLICK_FAILED',
+                    'message': 'Failed to click terms and conditions checkbox'
+                }
             
             # 2 second delay after checkbox click
             logger.info("Waiting 2 seconds after checkbox click...")
@@ -57,7 +61,11 @@ class Step5TermsAndConditions(BaseStep):
             logger.info("Clicking Continue button...")
             if not self.find_and_click_button(self.continue_button, "Continue button"):
                 logger.error("Failed to click Continue button")
-                return False
+                return {
+                    'status': False,
+                    'code': 'CONTINUE_BUTTON_FAILED',
+                    'message': 'Failed to click Continue button'
+                }
             
             logger.info("✅ Step 5 completed successfully - Terms and conditions accepted")
             
@@ -65,9 +73,17 @@ class Step5TermsAndConditions(BaseStep):
             logger.info("Waiting 5 seconds...")
             time.sleep(5)
             
-            return True
+            return {
+                'status': True,
+                'code': 'SUCCESS',
+                'message': 'Step 5 completed successfully - Terms and conditions accepted'
+            }
             
         except Exception as e:
             logger.error(f"❌ Step 5 failed with error: {str(e)}")
-            return False
+            return {
+                'status': False,
+                'code': 'STEP5_EXCEPTION',
+                'message': f'Step 5 failed with error: {str(e)}'
+            }
 

@@ -41,14 +41,26 @@ class Step9EmergencyContact(BaseStep):
             logger.info("Clicking Continue button on emergency contact page...")
             if not self.find_and_click_button(self.continue_button, "Continue button"):
                 logger.error("Failed to click Continue button")
-                return False
+                return {
+                    'status': False,
+                    'code': 'CONTINUE_BUTTON_FAILED',
+                    'message': 'Failed to click Continue button'
+                }
             
             # Small delay to allow next page to load
             time.sleep(5)
             
             logger.info("✅ Step 9 completed successfully - Emergency contact page submitted")
-            return True
+            return {
+                'status': True,
+                'code': 'SUCCESS',
+                'message': 'Step 9 completed successfully - Emergency contact page submitted'
+            }
             
         except Exception as e:
             logger.error(f"❌ Step 9 failed with error: {str(e)}")
-            return False
+            return {
+                'status': False,
+                'code': 'STEP9_EXCEPTION',
+                'message': f'Step 9 failed with error: {str(e)}'
+            }

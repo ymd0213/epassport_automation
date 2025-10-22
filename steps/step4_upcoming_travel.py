@@ -176,11 +176,66 @@ class Step4UpcomingTravel(BaseStep):
             
             time.sleep(2)  # Wait for form to update
             
+            # Validate Continue button before clicking
+            logger.info("Validating Continue button...")
+            continue_button_element = self.find_element(self.continue_button, "Continue button")
+            
+            if not continue_button_element:
+                # Continue button not found - check for travel plans error
+                logger.warning("Continue button not found - checking for travel plans error")
+                try:
+                    travel_plans_error = self.driver.find_element("css selector", 'p.usa-alert__text div')
+                    if travel_plans_error:
+                        error_message = travel_plans_error.text.strip()
+                        logger.error(f"Travel plans error detected: {error_message}")
+                        return {
+                            'status': False,
+                            'code': 'TRAVEL_PLANS_ERROR',
+                            'message': error_message
+                        }
+                except:
+                    pass  # No travel plans error found
+                
+                logger.error("Continue button not found and travel plans error detected")
+                return {
+                    'status': False,
+                    'code': 'CONTINUE_BUTTON_NOT_FOUND',
+                    'message': 'Continue button not found and travel plans error detected'
+                }
+            
+            # Check if continue button is disabled
+            if not continue_button_element.is_enabled():
+                # Continue button is disabled - check for date error
+                logger.warning("Continue button is disabled - checking for date error")
+                try:
+                    date_error = self.driver.find_element("css selector", 'span[data-testid="errorMessage"]')
+                    if date_error:
+                        error_message = date_error.text.strip()
+                        logger.error(f"Date error detected: {error_message}")
+                        return {
+                            'status': False,
+                            'code': 'TRAVEL_PLANS_ERROR',
+                            'message': error_message
+                        }
+                except:
+                    pass  # No date error found
+                
+                logger.error("Continue button is disabled but no date error detected")
+                return {
+                    'status': False,
+                    'code': 'CONTINUE_BUTTON_DISABLED',
+                    'message': 'Continue button is disabled but no date error detected'
+                }
+            
             # Click Continue button
             logger.info("Clicking Continue button...")
             if not self.find_and_click_button(self.continue_button, "Continue button"):
                 logger.error("Failed to click Continue button")
-                return False
+                return {
+                    'status': False,
+                    'code': 'CONTINUE_BUTTON_CLICK_FAILED',
+                    'message': 'Failed to click Continue button'
+                }
             
             logger.info("✅ Step 4 completed successfully - Upcoming travel form submitted")
             
@@ -188,8 +243,16 @@ class Step4UpcomingTravel(BaseStep):
             logger.info("Waiting 5 seconds...")
             time.sleep(5)
             
-            return True
+            return {
+                'status': True,
+                'code': 'SUCCESS',
+                'message': 'Step 4 completed successfully - Upcoming travel form submitted'
+            }
             
         except Exception as e:
             logger.error(f"❌ Step 4 failed with error: {str(e)}")
-            return False
+            return {
+                'status': False,
+                'code': 'STEP4_EXCEPTION',
+                'message': f'Step 4 failed with error: {str(e)}'
+            }

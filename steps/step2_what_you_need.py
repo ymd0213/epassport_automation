@@ -49,11 +49,23 @@ class Step2WhatYouNeed(BaseStep):
                 logger.info("Waiting 5 seconds...")
                 time.sleep(5)
                 
-                return True
+                return {
+                    'status': True,
+                    'code': 'SUCCESS',
+                    'message': 'Step 2 completed successfully - Continue button clicked'
+                }
             else:
                 logger.error("❌ Step 2 failed - Could not find or click Continue button")
-                return False
+                return {
+                    'status': False,
+                    'code': 'CONTINUE_BUTTON_FAILED',
+                    'message': 'Could not find or click Continue button'
+                }
                 
         except Exception as e:
             logger.error(f"❌ Step 2 failed with error: {str(e)}")
-            return False
+            return {
+                'status': False,
+                'code': 'STEP2_EXCEPTION',
+                'message': f'Step 2 failed with error: {str(e)}'
+            }

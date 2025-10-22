@@ -319,6 +319,50 @@ class Step8PersonalInformation(BaseStep):
             'data_testid': 'button'
         }
     
+    def check_for_errors(self):
+        """
+        Check for error messages after button clicks
+        
+        Returns:
+            dict or None: Error data if found, None if no errors
+        """
+        try:
+            # Look for error alert body
+            error_alert = self.driver.find_element("css selector", "div.usa-alert__body")
+            if error_alert:
+                # Find all span elements with class "text-bold" inside the alert
+                try:
+                    bold_spans = error_alert.find_elements("css selector", "span.text-bold")
+                    if bold_spans:
+                        error_messages = []
+                        for span in bold_spans:
+                            if span.text.strip():
+                                error_messages.append(span.text.strip())
+                        
+                        if error_messages:
+                            error_message = ", ".join(error_messages)
+                            logger.error(f"❌ Error found: {error_message}")
+                            return {
+                                'status': False,
+                                'code': 'FORM_VALIDATION_ERROR',
+                                'message': error_message
+                            }
+                except:
+                    # If we can't find specific bold spans, get the general error text
+                    error_text = error_alert.text.strip()
+                    if error_text:
+                        logger.error(f"❌ General error found: {error_text}")
+                        return {
+                            'status': False,
+                            'code': 'PESONAL_INFORMATION_ERROR',
+                            'message': error_text
+                        }
+        except:
+            # No error alert found
+            pass
+        
+        return None
+    
     def find_and_select_combo_box_option(self, combo_selector, country_code, description="combo box"):
         """
         Find and select from a combo box using country code
@@ -448,6 +492,11 @@ class Step8PersonalInformation(BaseStep):
                     logger.error("Failed to click Add Name button")
                     return False
                 time.sleep(1)
+                
+                # Check for errors after Add Name button click
+                error_result = self.check_for_errors()
+                if error_result:
+                    return error_result
             
             # Fill phone number
             logger.info("Filling phone number...")
@@ -498,6 +547,11 @@ class Step8PersonalInformation(BaseStep):
                 logger.error("Failed to click Add Address button")
                 return False
             time.sleep(1)
+            
+            # Check for errors after Add Address button click
+            error_result = self.check_for_errors()
+            if error_result:
+                return error_result
             
             # Fill address based on permanent_address_same condition
             permanent_address_same = self.passport_data.get('permanent_address_same', '')
@@ -580,12 +634,22 @@ class Step8PersonalInformation(BaseStep):
                 return False
             time.sleep(5)  # Wait 10 seconds after address submit
             
+            # Check for errors after Add Address submit button click
+            error_result = self.check_for_errors()
+            if error_result:
+                return error_result
+            
             # Click Continue after address submission
             logger.info("Clicking Continue button after address submission...")
             if not self.find_and_click_button(self.continue_button, "Continue button"):
                 logger.error("Failed to click Continue button after address submission")
                 return False
             time.sleep(5)
+            
+            # Check for errors after Continue button click
+            error_result = self.check_for_errors()
+            if error_result:
+                return error_result
             
             # Fill place of birth country
             logger.info("Filling place of birth...")
@@ -696,9 +760,22 @@ class Step8PersonalInformation(BaseStep):
                 logger.error("Failed to click Continue button")
                 return False
             
+            # Check for errors after final Continue button click
+            error_result = self.check_for_errors()
+            if error_result:
+                return error_result
+            
             logger.info("✅ Step 8 completed successfully - Personal information form submitted")
-            return True
+            return {
+                'status': True,
+                'code': 'SUCCESS',
+                'message': 'Step 8 completed successfully - Personal information form submitted'
+            }
             
         except Exception as e:
             logger.error(f"❌ Step 8 failed with error: {str(e)}")
-            return False
+            return {
+                'status': False,
+                'code': 'STEP8_EXCEPTION',
+                'message': f'Step 8 failed with error: {str(e)}'
+            }

@@ -51,11 +51,23 @@ class Step1LandingPage(BaseStep):
                 logger.info("Waiting 5 seconds...")
                 time.sleep(5)
                 
-                return True
+                return {
+                    'status': True,
+                    'code': 'SUCCESS',
+                    'message': 'Step 1 completed successfully - Get Started button clicked'
+                }
             else:
                 logger.error("❌ Step 1 failed - Could not find or click Get Started button")
-                return False
+                return {
+                    'status': False,
+                    'code': 'GET_STARTED_BUTTON_FAILED',
+                    'message': 'Could not find or click Get Started button'
+                }
                 
         except Exception as e:
             logger.error(f"❌ Step 1 failed with error: {str(e)}")
-            return False
+            return {
+                'status': False,
+                'code': 'STEP1_EXCEPTION',
+                'message': f'Step 1 failed with error: {str(e)}'
+            }
