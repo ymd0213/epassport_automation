@@ -758,10 +758,19 @@ class Step8PersonalInformation(BaseStep):
             logger.info("Clicking Continue button...")
             if not self.find_and_click_button(self.continue_button, "Continue button"):
                 logger.error("Failed to click Continue button")
-                return False
+                return {
+                    'status': False,
+                    'code': 'STEP8_BUTTON_CLICK_FAILED',
+                    'message': 'Failed to click Continue button'
+                }
+            
+            # Wait 5 seconds after clicking continue button
+            logger.info("Waiting 5 seconds after clicking Continue...")
+            time.sleep(5)
             
             # Check for errors after final Continue button click
-            error_result = self.check_for_errors()
+            logger.info("Checking for errors after clicking Continue...")
+            error_result = self.check_for_page_errors("STEP8")
             if error_result:
                 return error_result
             

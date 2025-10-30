@@ -47,8 +47,14 @@ class Step9EmergencyContact(BaseStep):
                     'message': 'Failed to click Continue button'
                 }
             
-            # Small delay to allow next page to load
+            # Wait 5 seconds after clicking button
             time.sleep(5)
+            
+            # Check for errors after clicking continue
+            logger.info("Checking for errors after clicking Continue...")
+            error_result = self.check_for_page_errors("STEP9")
+            if error_result:
+                return error_result
             
             logger.info("✅ Step 9 completed successfully - Emergency contact page submitted")
             return {

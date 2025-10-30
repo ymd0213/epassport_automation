@@ -120,29 +120,47 @@ class Step7PassportPhoto(BaseStep):
             logger.info("Clicking initial Continue button...")
             if not self.find_and_click_button(self.initial_continue_button, "initial Continue button"):
                 logger.error("Failed to click initial Continue button")
-                return False
+                return {
+                    'status': False,
+                    'code': 'STEP7_INITIAL_BUTTON_FAILED',
+                    'message': 'Failed to click initial Continue button'
+                }
             
-            # Wait a moment for the page to update
-            time.sleep(2)
+            # Wait 5 seconds and check for errors
+            time.sleep(5)
+            error_result = self.check_for_page_errors("STEP7")
+            if error_result:
+                return error_result
             
             # Upload passport photo
             logger.info("Uploading passport photo...")
             photo_path = "accept-man.jpg"
             if not self.find_and_upload_file(photo_path, "passport photo upload"):
                 logger.error("Failed to upload passport photo")
-                return False
+                return {
+                    'status': False,
+                    'code': 'STEP7_UPLOAD_FAILED',
+                    'message': 'Failed to upload passport photo'
+                }
             
             # Wait for upload to process
             time.sleep(3)
             
-            # Click Continue button after upload (this might be disabled initially)
+            # Click Continue button after upload
             logger.info("Clicking Continue button after upload...")
             if not self.find_and_click_button(self.continue_after_upload, "Continue button after upload"):
                 logger.error("Failed to click Continue button after upload")
-                return False
+                return {
+                    'status': False,
+                    'code': 'STEP7_UPLOAD_BUTTON_FAILED',
+                    'message': 'Failed to click Continue button after upload'
+                }
             
-            # Wait for processing
+            # Wait 5 seconds and check for errors
             time.sleep(5)
+            error_result = self.check_for_page_errors("STEP7")
+            if error_result:
+                return error_result
             
             # Look for final Continue button 3 times
             for attempt in range(3):
@@ -154,14 +172,21 @@ class Step7PassportPhoto(BaseStep):
                     if continue_btn:
                         logger.info("Found final Continue button, clicking it...")
                         continue_btn.click()
+                        
+                        # Wait 5 seconds and check for errors
+                        time.sleep(5)
+                        error_result = self.check_for_page_errors("STEP7")
+                        if error_result:
+                            return error_result
+                        
                         logger.info("✅ Step 7 completed successfully - Final Continue button clicked")
                         return {
                             'status': True,
                             'code': 'SUCCESS',
                             'message': 'Step 7 completed successfully - Final Continue button clicked'
                         }
-                except:
-                    logger.info(f"Final Continue button not found on attempt {attempt + 1}")
+                except Exception as e:
+                    logger.debug(f"Final Continue button not found on attempt {attempt + 1}: {e}")
                 
                 if attempt < 2:  # Don't sleep after the last attempt
                     time.sleep(2)

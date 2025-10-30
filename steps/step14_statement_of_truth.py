@@ -126,8 +126,14 @@ class Step14StatementOfTruth(BaseStep):
                     'message': 'Failed to click Continue button'
                 }
             
-            # Small delay to allow next page to load
+            # Wait 5 seconds after clicking button
             time.sleep(5)
+            
+            # Check for errors after clicking continue
+            logger.info("Checking for errors after clicking Continue...")
+            error_result = self.check_for_page_errors("STEP14")
+            if error_result:
+                return error_result
             
             logger.info("✅ Step 14 completed successfully - Statement of truth page submitted")
             return {

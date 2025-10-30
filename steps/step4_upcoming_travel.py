@@ -134,6 +134,12 @@ class Step4UpcomingTravel(BaseStep):
                     logger.error("Failed to input departure year")
                     return False
                 time.sleep(2)  # 2 second delay after input
+
+                # Check for errors after filling departure date
+                logger.info("Checking for errors after filling departure date...")
+                error_result = self.check_for_page_errors("STEP4")
+                if error_result:
+                    return error_result
                 
                 # Fill return date
                 logger.info("Filling return date...")
@@ -237,12 +243,17 @@ class Step4UpcomingTravel(BaseStep):
                     'message': 'Failed to click Continue button'
                 }
             
-            logger.info("✅ Step 4 completed successfully - Upcoming travel form submitted")
-            
-            # Wait 5 seconds as requested
-            logger.info("Waiting 5 seconds...")
+            # Wait 5 seconds after clicking button
+            logger.info("Waiting 5 seconds after clicking Continue...")
             time.sleep(5)
             
+            # Check for errors after clicking continue
+            logger.info("Checking for errors after clicking Continue...")
+            error_result = self.check_for_page_errors("STEP4")
+            if error_result:
+                return error_result
+            
+            logger.info("✅ Step 4 completed successfully - Upcoming travel form submitted")
             return {
                 'status': True,
                 'code': 'SUCCESS',

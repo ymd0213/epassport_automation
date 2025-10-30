@@ -115,11 +115,15 @@ class Step11MailingAddress(BaseStep):
                 logger.info("permanent_address_same is 1 -> clicking Continue and waiting 5s")
                 if not self.find_and_click_button(self.continue_button, "Continue button"):
                     logger.error("Failed to click Continue button")
-                    return False
+                    return {
+                        'status': False,
+                        'code': 'STEP11_BUTTON_FAILED',
+                        'message': 'Failed to click Continue button'
+                    }
                 time.sleep(5)
                 
                 # Check for errors after Continue button click
-                error_result = self.check_for_errors()
+                error_result = self.check_for_page_errors("STEP11")
                 if error_result:
                     return error_result
             else:
@@ -127,11 +131,15 @@ class Step11MailingAddress(BaseStep):
                 # Click Edit Mailing Address
                 if not self.find_and_click_button(self.edit_mailing_button, "Edit Mailing Address button"):
                     logger.error("Failed to click Edit Mailing Address button")
-                    return False
-                time.sleep(1)
+                    return {
+                        'status': False,
+                        'code': 'STEP11_EDIT_BUTTON_FAILED',
+                        'message': 'Failed to click Edit Mailing Address button'
+                    }
+                time.sleep(5)
                 
                 # Check for errors after Edit Mailing Address button click
-                error_result = self.check_for_errors()
+                error_result = self.check_for_page_errors("STEP11")
                 if error_result:
                     return error_result
                 
@@ -167,24 +175,47 @@ class Step11MailingAddress(BaseStep):
                 # Click Add Address
                 if not self.find_and_click_button(self.add_address_button, "Add Address button"):
                     logger.error("Failed to click Add Address button")
-                    return False
-                time.sleep(10)
+                    return {
+                        'status': False,
+                        'code': 'STEP11_ADD_ADDRESS_FAILED',
+                        'message': 'Failed to click Add Address button'
+                    }
+                time.sleep(5)
                 
                 # Check for errors after Add Address button click
-                error_result = self.check_for_errors()
+                error_result = self.check_for_page_errors("STEP11")
                 if error_result:
                     return error_result
                 
                 # Click Continue
                 if not self.find_and_click_button(self.continue_button, "Continue button"):
                     logger.error("Failed to click Continue button after Add Address")
-                    return False
+                    return {
+                        'status': False,
+                        'code': 'STEP11_CONTINUE_FAILED',
+                        'message': 'Failed to click Continue button after Add Address'
+                    }
                 time.sleep(5)
+                
+                # Check for errors
+                error_result = self.check_for_page_errors("STEP11")
+                if error_result:
+                    return error_result
                 
                 # Click Continue again (as specified)
                 if not self.find_and_click_button(self.continue_button, "Continue button (final)"):
                     logger.error("Failed to click final Continue button")
-                    return False
+                    return {
+                        'status': False,
+                        'code': 'STEP11_FINAL_CONTINUE_FAILED',
+                        'message': 'Failed to click final Continue button'
+                    }
+                time.sleep(5)
+                
+                # Check for errors
+                error_result = self.check_for_page_errors("STEP11")
+                if error_result:
+                    return error_result
             
             logger.info("✅ Step 11 completed successfully")
             return {

@@ -26,6 +26,57 @@ class BaseStep:
         self.step_name = step_name
         self.wait = WebDriverWait(driver, 10)
     
+    def find_element(self, element_selector, description="element"):
+        """
+        Find an element using various selector strategies
+        
+        Args:
+            element_selector (dict): Dictionary containing selector strategies
+            description (str): Description of the element for logging
+            
+        Returns:
+            WebElement: The found element, or None if not found
+        """
+        try:
+            logger.info(f"Looking for {description}...")
+            
+            # Try different selector strategies
+            selectors = []
+            
+            # Add selectors in order of specificity
+            if element_selector.get('css_selector'):
+                selectors.append((By.CSS_SELECTOR, element_selector.get('css_selector')))
+            
+            if element_selector.get('xpath'):
+                selectors.append((By.XPATH, element_selector.get('xpath')))
+            
+            # Add data-testid selector using CSS selector
+            if element_selector.get('data_testid'):
+                selectors.append((By.CSS_SELECTOR, f'[data-testid="{element_selector.get("data_testid")}"]'))
+            
+            if element_selector.get('class_name'):
+                selectors.append((By.CLASS_NAME, element_selector.get('class_name')))
+            
+            if element_selector.get('id'):
+                selectors.append((By.ID, element_selector.get('id')))
+            
+            element = None
+            for by, selector in selectors:
+                if selector:
+                    try:
+                        element = self.wait.until(EC.presence_of_element_located((by, selector)))
+                        logger.info(f"Found {description} using {by}: {selector}")
+                        return element
+                    except:
+                        continue
+            
+            logger.warning(f"Could not find {description}")
+            return None
+                
+        except Exception as e:
+            logger.error(f"❌ Error finding {description}: {str(e)}")
+            return None
+    
     def find_and_click_button(self, button_selector, description="button"):
         """
         Find and click a button using various selector strategies
@@ -445,6 +496,73 @@ class BaseStep:
             logger.error(f"❌ Error selecting from {description}: {str(e)}")
             return False
 
+    def check_for_page_errors(self, step_name="STEP"):
+        """
+        Check for error messages on the page after an action
+        
+        Args:
+            step_name (str): Name of the step for error code
+            
+        Returns:
+            dict or None: Error dict if error found, None if no errors
+        """
+        try:
+            # Wait a moment for any errors to appear
+            time.sleep(1)
+            
+            # Look for any usa-alert element
+            try:
+                alert_element = self.driver.find_element(By.CSS_SELECTOR, "div.usa-alert")
+                if alert_element and alert_element.is_displayed():
+                    # Check if it has usa-alert--success class
+                    alert_classes = alert_element.get_attribute("class")
+                    
+                    if "usa-alert--success" in alert_classes:
+                        # This is a success alert, not an error
+                        success_text = alert_element.text.strip()
+                        logger.info(f"✅ Success alert found in {step_name}: {success_text}")
+                        return None  # This is success, not error
+                    else:
+                        # This is an error or warning alert
+                        error_text = alert_element.text.strip()
+                        if error_text:
+                            logger.error(f"❌ Error alert found in {step_name}: {error_text}")
+                            return {
+                                'status': False,
+                                'code': f'{step_name}_ERROR',
+                                'message': error_text
+                            }
+            except Exception as e:
+                logger.debug(f"No usa-alert found: {e}")
+            
+            # Look for inline error messages with errorMessage testid
+            try:
+                error_spans = self.driver.find_elements(By.CSS_SELECTOR, 'span[data-testid="errorMessage"]')
+                error_messages = []
+                for error_span in error_spans:
+                    if error_span.is_displayed():
+                        text = error_span.text.strip()
+                        if text:
+                            error_messages.append(text)
+                
+                if error_messages:
+                    error_message = ", ".join(error_messages)
+                    logger.error(f"❌ Inline error found in {step_name}: {error_message}")
+                    return {
+                        'status': False,
+                        'code': f'{step_name}_VALIDATION_ERROR',
+                        'message': error_message
+                    }
+            except Exception as e:
+                logger.debug(f"No inline error messages found: {e}")
+            
+            # No errors found
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Error while checking for page errors: {str(e)}")
+            return None
+    
     def execute(self):
         """
         Execute the step - to be implemented by subclasses

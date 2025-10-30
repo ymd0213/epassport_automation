@@ -5,6 +5,7 @@ Handles passport renewal form with book/card selection and personal information
 
 import time
 import logging
+from selenium.webdriver.common.by import By
 from .base_step import BaseStep
 
 logger = logging.getLogger(__name__)
@@ -307,75 +308,70 @@ class Step6WhatAreYouRenewing(BaseStep):
             logger.info("Clicking Continue button...")
             if not self.find_and_click_button(self.continue_button, "Continue button"):
                 logger.error("Failed to click Continue button")
-                return False
+                return {
+                    'status': False,
+                    'code': 'STEP6_BUTTON_CLICK_FAILED',
+                    'message': 'Failed to click Continue button'
+                }
             
-            # Wait 5 seconds after clicking continue
-            logger.info("Waiting 5 seconds after clicking Continue...")
-            time.sleep(5)
-            
-            # Wait 20 seconds and check for Continue button first
-            logger.info("Waiting 20 seconds to check for Continue button...")
+
+            # Wait additional time for page to load
+            logger.info("Waiting 20 seconds for page to load...")
             time.sleep(20)
             
-            # Look for Continue button 3 times first
+            # Check for errors FIRST before looking for Continue button
+            logger.info("Checking for errors after clicking Continue...")
+            error_result = self.check_for_page_errors("STEP6")
+            if error_result:
+                return error_result
+            
+
+            
+            # Look for Continue button to proceed
             for attempt in range(3):
-                logger.info(f"Looking for Continue button (attempt {attempt + 1}/3)...")
+                logger.info(f"Looking for Continue button to proceed (attempt {attempt + 1}/3)...")
                 
                 try:
-                    continue_btn = self.driver.find_element("css selector", 'button[type="button"][data-testid="button"]')
+                    # Use the base class method to find the continue button after error
+                    continue_btn = self.find_element(self.continue_button_after_error, "Continue button after error")
+                    
                     if continue_btn:
                         logger.info("Found Continue button, clicking it...")
                         continue_btn.click()
+                        
+                        # Wait 5 seconds and check for errors after second click
+                        time.sleep(5)
+                        error_result = self.check_for_page_errors("STEP6")
+                        if error_result:
+                            return error_result
+                        
                         logger.info("✅ Step 6 completed successfully - Continue button clicked")
                         return {
                             'status': True,
                             'code': 'SUCCESS',
                             'message': 'Step 6 completed successfully - Continue button clicked'
                         }
-                except:
-                    logger.info(f"Continue button not found on attempt {attempt + 1}")
+                    else:
+                        logger.warning(f"No Continue button found on attempt {attempt + 1}")
+                        
+                except Exception as e:
+                    logger.debug(f"Continue button not found on attempt {attempt + 1}: {e}")
                 
                 if attempt < 2:  # Don't sleep after the last attempt
-                    time.sleep(2)
+                    time.sleep(3)
             
-            # If Continue button not found, look for error message
-            logger.info("Continue button not found, checking for error messages...")
+            # If Continue button not found, check for errors again
+            logger.warning("Continue button not found after waiting, checking for errors...")
+            error_result = self.check_for_page_errors("STEP6")
+            if error_result:
+                return error_result
             
-            try:
-                # Look for the specific error message
-                error_heading = self.driver.find_element("css selector", "h1.usa-alert__heading")
-                if error_heading and "Your passport book is eligible for online renewal" in error_heading.text:
-                    error_message = error_heading.text
-                    logger.error(f"❌ Error found: {error_message}")
-                    return {
-                        'status': False,
-                        'code': 'PASSPORT_ELIGIBILITY_ERROR',
-                        'message': error_message
-                    }
-            except:
-                logger.info("No specific error message found")
-            
-            # Check for other common error patterns
-            try:
-                # Look for general error alert
-                error_alert = self.driver.find_element("css selector", "div.usa-alert__body")
-                if error_alert:
-                    error_message = error_alert.text.strip()
-                    logger.error(f"❌ General error found: {error_message}")
-                    return {
-                        'status': False,
-                        'code': 'GENERAL_ERROR',
-                        'message': error_message
-                    }
-            except:
-                logger.info("No general error message found")
-            
-            # If we get here, no Continue button was found and no specific error message
-            logger.error("❌ Your passport data is not correct - Continue button not found")
+            # If we get here, no Continue button was found and no error message
+            logger.error("❌ Continue button not found and no error message displayed")
             return {
                 'status': False,
-                'code': 'CONTINUE_BUTTON_NOT_FOUND',
-                'message': 'Continue button not found after form submission'
+                'code': 'STEP6_CONTINUE_NOT_FOUND',
+                'message': 'Continue button not found after form submission and no error message displayed'
             }
             
         except Exception as e:

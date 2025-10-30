@@ -10,20 +10,23 @@ import platform
 import subprocess
 import os
 import json
-from steps.step1 import Step1LandingPage
-from steps.step2 import Step2WhatYouNeed
-from steps.step3 import Step3EligibilityRequirements
-from steps.step4 import Step4WhyAreWeAskingForThis
-from steps.step5 import Step5TermsAndConditions
-from steps.step6 import Step6WhatAreYouRenewing
-from steps.step7 import Step7PassportPhoto
-from steps.step8 import Step8PersonalInformation
-from steps.step9 import Step9EmergencyContact
-from steps.step10 import Step10PassportOptions
-from steps.step11 import Step11MailingAddress
-from steps.step12 import Step12PassportDelivery
-from steps.step13 import Step13ReviewOrder
-from steps.step14 import Step14StatementOfTruth
+import requests
+from dotenv import load_dotenv
+from steps.step1_landing_page import Step1LandingPage
+from steps.step2_what_you_need import Step2WhatYouNeed
+from steps.step3_eligibility_requirements import Step3EligibilityRequirements
+from steps.step4_upcoming_travel import Step4UpcomingTravel
+from steps.step5_terms_and_conditions import Step5TermsAndConditions
+from steps.step6_what_are_you_renewing import Step6WhatAreYouRenewing
+from steps.step7_passport_photo import Step7PassportPhoto
+from steps.step8_personal_information import Step8PersonalInformation
+from steps.step9_emergency_contact import Step9EmergencyContact
+from steps.step10_passport_options import Step10PassportOptions
+from steps.step11_mailing_address import Step11MailingAddress
+from steps.step12_passport_delivery import Step12PassportDelivery
+from steps.step13_review_order import Step13ReviewOrder
+from steps.step14_statement_of_truth import Step14StatementOfTruth
+from steps.step15_payment import Step15Payment
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -212,34 +215,294 @@ class UndetectedWebAutomation:
 
 
 def load_passport_data():
-    """Load passport data from JSON file"""
+    """Load passport data from backend API"""
     try:
-        with open('passport_data.json', 'r') as file:
-            data = json.load(file)
-            logger.info(f"Loaded {len(data)} passport applications from JSON file")
-            return data
+        # Load environment variables
+        load_dotenv()
+        api_endpoint = os.getenv('API_ENDPOINT')
+        
+        if not api_endpoint:
+            logger.error("API_ENDPOINT not found in .env file")
+            return []
+        
+        logger.info(f"Fetching passport data from API: {api_endpoint}")
+        
+        # Make GET request to the API with timeout
+        response = requests.get(api_endpoint, timeout=10)  # 10 second timeout
+        response.raise_for_status()
+        
+        # Parse JSON response
+        api_data = response.json()
+        
+        if 'data' not in api_data or not isinstance(api_data['data'], list):
+            logger.error("Invalid API response format: 'data' key not found or is not a list")
+            return []
+        
+        # Get first 5 results
+        first_five = api_data['data'][:5]
+        logger.info(f"Retrieved {len(api_data['data'])} applications from API, using first {len(first_five)}")
+        
+        # Parse the 'data' field from each application (it's a JSON string)
+        passport_data = []
+        for idx, application in enumerate(first_five):
+            try:
+                if 'data' in application and application['data']:
+                    # Parse the JSON string in the 'data' field
+                    parsed_data = json.loads(application['data'])
+                    # Append both id and parsed data
+                    passport_data.append({
+                        'id': application.get('id'),
+                        'data': parsed_data
+                    })
+                    logger.info(f"Application {idx + 1} (ID: {application.get('id')}): Parsed data for {parsed_data.get('first_name', 'Unknown')} {parsed_data.get('last_name', 'Unknown')}")
+                else:
+                    logger.warning(f"Application {idx + 1}: No 'data' field found")
+            except json.JSONDecodeError as e:
+                logger.error(f"Application {idx + 1}: Failed to parse data field: {str(e)}")
+            except Exception as e:
+                logger.error(f"Application {idx + 1}: Error processing application: {str(e)}")
+        
+        logger.info(f"Successfully loaded {len(passport_data)} passport applications from API")
+        return passport_data
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to fetch data from API: {str(e)}")
+        return []
     except Exception as e:
         logger.error(f"Failed to load passport data: {str(e)}")
         return []
+
+def extract_step_result(step_result):
+    """
+    Extract status, code, and message from step result
+    
+    Args:
+        step_result: Can be bool or dict with status, code, message
+        
+    Returns:
+        tuple: (success: bool, code: str, message: str)
+    """
+    if isinstance(step_result, dict):
+        success = step_result.get('status', False)
+        code = step_result.get('code', 'UNKNOWN_ERROR')
+        message = step_result.get('message', 'Step failed')
+        return success, code, message
+    elif isinstance(step_result, bool):
+        if step_result:
+            return True, 'SUCCESS', 'Step completed successfully'
+        else:
+            return False, 'STEP_FAILED', 'Step failed'
+    else:
+        return False, 'INVALID_RESULT', 'Invalid step result type'
+
+
+def update_application_status(application_id, renewal_status, renewal_error=None):
+    """
+    Update application status via backend API
+    
+    Args:
+        application_id: The application ID
+        renewal_status: "1" for failed, "2" for success
+        renewal_error: Dict with code and message (optional, for failures)
+        
+    Returns:
+        bool: True if update was successful, False otherwise
+    """
+    try:
+        load_dotenv()
+        update_endpoint = os.getenv('API_ENDPOINT')
+        
+        if not update_endpoint:
+            logger.error("API_ENDPOINT not found in .env file")
+            return False
+        
+        # Prepare request body
+        request_body = {
+            "id": str(application_id),
+            "renewal_status": renewal_status
+        }
+        
+        # Add renewal_error if provided (for failed cases)
+        if renewal_error:
+            request_body["renewal_error"] = json.dumps(renewal_error)
+        
+        logger.info(f"Updating application status for ID {application_id}: {request_body}")
+        
+        # Make POST request to update status
+        response = requests.post(update_endpoint, json=request_body, timeout=10)
+        response.raise_for_status()
+        
+        logger.info(f"✅ Successfully updated status for application {application_id}")
+        return True
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f"❌ Failed to update status via API: {str(e)}")
+        return False
+    except Exception as e:
+        logger.error(f"❌ Error updating application status: {str(e)}")
+        return False
+
+
+def process_single_application(driver, passport_data, app_index, total_apps):
+    """
+    Process a single passport application through all steps
+    
+    Args:
+        driver: Selenium WebDriver instance
+        passport_data: Dictionary containing passport application data (with 'id' and 'data' keys)
+        app_index: Current application index (0-based)
+        total_apps: Total number of applications to process
+        
+    Returns:
+        dict: Dictionary containing success status and results for the application
+    """
+    data = passport_data.get('data', {})
+    application_id = passport_data.get('id', 'Unknown')
+    applicant_name = f"{data.get('first_name', 'Unknown')} {data.get('last_name', 'Unknown')}"
+    
+    print("\n" + "#"*70)
+    print(f"# PROCESSING APPLICATION {app_index + 1}/{total_apps}")
+    print(f"# Application ID: {application_id}")
+    print(f"# Applicant: {applicant_name}")
+    print("#"*70)
+    
+    results = {}
+    failed_step = None
+    failed_error = None
+    
+    try:
+        # Define all steps with their configurations
+        steps = [
+            {"num": 1, "name": "Landing Page", "class": Step1LandingPage, "params": [driver]},
+            {"num": 2, "name": "What You Need", "class": Step2WhatYouNeed, "params": [driver]},
+            {"num": 3, "name": "Eligibility Requirements", "class": Step3EligibilityRequirements, "params": [driver]},
+            {"num": 4, "name": "Upcoming Travel", "class": Step4UpcomingTravel, "params": [driver, data]},
+            {"num": 5, "name": "Terms and Conditions", "class": Step5TermsAndConditions, "params": [driver]},
+            {"num": 6, "name": "What Are You Renewing", "class": Step6WhatAreYouRenewing, "params": [driver, data]},
+            {"num": 7, "name": "Passport Photo Upload", "class": Step7PassportPhoto, "params": [driver]},
+            {"num": 8, "name": "Personal Information", "class": Step8PersonalInformation, "params": [driver, data]},
+            {"num": 9, "name": "Emergency Contact", "class": Step9EmergencyContact, "params": [driver, data]},
+            {"num": 10, "name": "Passport Options", "class": Step10PassportOptions, "params": [driver, data]},
+            {"num": 11, "name": "Mailing Address", "class": Step11MailingAddress, "params": [driver, data]},
+            {"num": 12, "name": "Passport Delivery", "class": Step12PassportDelivery, "params": [driver, data]},
+            {"num": 13, "name": "Review Order", "class": Step13ReviewOrder, "params": [driver, data]},
+            {"num": 14, "name": "Statement of Truth", "class": Step14StatementOfTruth, "params": [driver, data]},
+            {"num": 15, "name": "Payment", "class": Step15Payment, "params": [driver, data]},
+        ]
+        
+        # Execute each step
+        for step_config in steps:
+            step_num = step_config["num"]
+            step_name = step_config["name"]
+            step_key = f"step{step_num}"
+            
+            print("\n" + "="*50)
+            print(f"EXECUTING STEP {step_num}: {step_name.upper()}")
+            print("="*50)
+            
+            # Execute step
+            step_instance = step_config["class"](*step_config["params"])
+            step_result = step_instance.execute()
+            
+            # Extract result details
+            success, code, message = extract_step_result(step_result)
+            results[step_key] = success
+            
+            if not success:
+                print(f"❌ Step {step_num} failed: {message}")
+                failed_step = step_num
+                failed_error = {
+                    "code": code,
+                    "message": message
+                }
+                logger.error(f"Application {application_id} failed at Step {step_num}: {code} - {message}")
+                break  # Stop processing further steps
+            else:
+                print(f"✅ Step {step_num} completed successfully")
+        
+        # Print summary for this application
+        print("\n" + "="*50)
+        print(f"SUMMARY FOR APPLICATION {app_index + 1}: {applicant_name}")
+        print("="*50)
+        
+        # Display executed steps
+        for step_config in steps:
+            step_num = step_config["num"]
+            step_name = step_config["name"]
+            step_key = f"step{step_num}"
+            
+            if step_key in results:
+                status = '✅ SUCCESS' if results[step_key] else '❌ FAILED'
+                print(f"Step {step_num} ({step_name}): {status}")
+            else:
+                print(f"Step {step_num} ({step_name}): ⏭️  SKIPPED")
+        
+        # Determine overall status and update backend
+        if failed_step:
+            print(f"\n❌ APPLICATION {app_index + 1} FAILED AT STEP {failed_step}")
+            print(f"Error: {failed_error['code']} - {failed_error['message']}")
+            print("="*50)
+            
+            # Update backend with failure status
+            update_application_status(application_id, "1", failed_error)
+            
+            return {
+                'success': False,
+                'failed_step': failed_step,
+                'error': failed_error,
+                'results': results
+            }
+        else:
+            print(f"\n🎉 APPLICATION {app_index + 1} COMPLETED SUCCESSFULLY!")
+            print("="*50)
+            
+            # Update backend with success status
+            update_application_status(application_id, "2")
+            
+            return {
+                'success': True,
+                'results': results
+            }
+        
+    except Exception as e:
+        logger.error(f"Error processing application {app_index + 1}: {str(e)}")
+        print(f"❌ Error processing application {app_index + 1}: {str(e)}")
+        
+        # Update backend with exception error
+        exception_error = {
+            "code": "APPLICATION_EXCEPTION",
+            "message": f"Error processing application: {str(e)}"
+        }
+        update_application_status(application_id, "1", exception_error)
+        
+        return {
+            'success': False,
+            'error': exception_error,
+            'results': results
+        }
+
 
 def main():
     """Main function to run the undetected automation"""
     print("Undetected ChromeDriver Web Automation")
     print("=" * 50)
     
-    # Load passport data
-    passport_data = load_passport_data()
-    if not passport_data:
+    # Load passport data from API
+    passport_data_list = load_passport_data()
+    if not passport_data_list:
         print("No passport data found. Exiting...")
         return
     
-    print(f"Processing {len(passport_data)} passport application(s)")
+    print(f"Loaded {len(passport_data_list)} passport application(s) from API")
     
     # Create automation instance
     automation = UndetectedWebAutomation(headless=False)
     
+    # Track overall results
+    all_applications_results = []
+    
     try:
-        # Setup driver
+        # Setup driver once for all applications
         if not automation.setup_driver():
             print("Failed to setup undetected ChromeDriver")
             return
@@ -250,185 +513,77 @@ def main():
         
         # Navigate to the OPR website
         target_url = "https://opr.travel.state.gov/"
-        if automation.navigate_to_url(target_url):
-            print(f"Successfully navigated to {target_url}")
-            
-            # Get page information
-            page_info = automation.get_page_info()
-            if page_info:
-                print(f"Page Title: {page_info['title']}")
-                print(f"Current URL: {page_info['url']}")
-            
-            # Wait 30 seconds after navigation as requested
-            print("\nWaiting 30 seconds after navigation...")
-            time.sleep(30)
-            
-            # Start step-by-step automation
-            print("Starting step-by-step automation...")
-            
-            # Execute Step 1: Landing Page
-            print("\n" + "="*50)
-            print("EXECUTING STEP 1: LANDING PAGE")
-            print("="*50)
-            step1 = Step1LandingPage(automation.driver)
-            step1_success = step1.execute()
-            if not step1_success:
-                print("❌ Step 1 failed. Continuing with remaining steps...")
-            
-            # Execute Step 2: What You Need
-            print("\n" + "="*50)
-            print("EXECUTING STEP 2: WHAT YOU NEED")
-            print("="*50)
-            step2 = Step2WhatYouNeed(automation.driver)
-            step2_success = step2.execute()
-            if not step2_success:
-                print("❌ Step 2 failed. Continuing with remaining steps...")
-            
-            # Execute Step 3: Eligibility Requirements
-            print("\n" + "="*50)
-            print("EXECUTING STEP 3: ELIGIBILITY REQUIREMENTS")
-            print("="*50)
-            step3 = Step3EligibilityRequirements(automation.driver)
-            step3_success = step3.execute()
-            if not step3_success:
-                print("❌ Step 3 failed. Continuing with remaining steps...")
-            
-            # Execute Step 4: Why Are We Asking For This (Travel Plans)
-            print("\n" + "="*50)
-            print("EXECUTING STEP 4: WHY ARE WE ASKING FOR THIS")
-            print("="*50)
-            # Use the first passport application data for travel plans
-            travel_data = passport_data[1] if passport_data else {}
-            step4 = Step4WhyAreWeAskingForThis(automation.driver, travel_data)
-            step4_success = step4.execute()
-            if not step4_success:
-                print("❌ Step 4 failed. Automation completed with errors.")
-            
-            # Execute Step 5: Terms and Conditions
-            print("\n" + "="*50)
-            print("EXECUTING STEP 5: TERMS AND CONDITIONS")
-            print("="*50)
-            step5 = Step5TermsAndConditions(automation.driver)
-            step5_success = step5.execute()
-            if not step5_success:
-                print("❌ Step 5 failed. Continuing with remaining steps...")
-            
-            # Execute Step 6: What Are You Renewing
-            print("\n" + "="*50)
-            print("EXECUTING STEP 6: WHAT ARE YOU RENEWING")
-            print("="*50)
-            # Use the first passport application data for renewal form
-            renewal_data = passport_data[0] if passport_data else {}
-            step6 = Step6WhatAreYouRenewing(automation.driver, renewal_data)
-            step6_success = step6.execute()
-            if not step6_success:
-                print("❌ Step 6 failed. Continuing with remaining steps...")
-            
-            # Execute Step 7: Passport Photo Upload
-            print("\n" + "="*50)
-            print("EXECUTING STEP 7: PASSPORT PHOTO UPLOAD")
-            print("="*50)
-            step7 = Step7PassportPhoto(automation.driver)
-            step7_success = step7.execute()
-            if not step7_success:
-                print("❌ Step 7 failed. Continuing with remaining steps...")
-            
-            # Execute Step 8: Personal Information
-            print("\n" + "="*50)
-            print("EXECUTING STEP 8: PERSONAL INFORMATION")
-            print("="*50)
-            # Use the first passport application data for personal information
-            personal_data = passport_data[0] if passport_data else {}
-            step8 = Step8PersonalInformation(automation.driver, personal_data)
-            step8_success = step8.execute()
-            if not step8_success:
-                print("❌ Step 8 failed. Continuing with remaining steps...")
-            
-            # Execute Step 9: Emergency Contact
-            print("\n" + "="*50)
-            print("EXECUTING STEP 9: EMERGENCY CONTACT")
-            print("="*50)
-            # Use the first passport application data for emergency contact
-            emergency_data = passport_data[0] if passport_data else {}
-            step9 = Step9EmergencyContact(automation.driver, emergency_data)
-            step9_success = step9.execute()
-            if not step9_success:
-                print("❌ Step 9 failed. Continuing with remaining steps...")
-            
-            # Execute Step 10: Passport Options
-            print("\n" + "="*50)
-            print("EXECUTING STEP 10: PASSPORT OPTIONS")
-            print("="*50)
-            # Use the first passport application data for passport options
-            options_data = passport_data[0] if passport_data else {}
-            step10 = Step10PassportOptions(automation.driver, options_data)
-            step10_success = step10.execute()
-            if not step10_success:
-                print("❌ Step 10 failed. Automation completed with errors.")
-            
-            # Execute Step 11: Mailing Address
-            print("\n" + "="*50)
-            print("EXECUTING STEP 11: MAILING ADDRESS")
-            print("="*50)
-            step11 = Step11MailingAddress(automation.driver, personal_data)
-            step11_success = step11.execute()
-            if not step11_success:
-                print("❌ Step 11 failed. Continuing with remaining steps...")
-            
-            # Execute Step 12: Passport Delivery
-            print("\n" + "="*50)
-            print("EXECUTING STEP 12: PASSPORT DELIVERY")
-            print("="*50)
-            step12 = Step12PassportDelivery(automation.driver, personal_data)
-            step12_success = step12.execute()
-            if not step12_success:
-                print("❌ Step 12 failed. Continuing with remaining steps...")
-            
-            # Execute Step 13: Review Order
-            print("\n" + "="*50)
-            print("EXECUTING STEP 13: REVIEW ORDER")
-            print("="*50)
-            step13 = Step13ReviewOrder(automation.driver, personal_data)
-            step13_success = step13.execute()
-            if not step13_success:
-                print("❌ Step 13 failed. Continuing with remaining steps...")
-            
-            # Execute Step 14: Statement of Truth
-            print("\n" + "="*50)
-            print("EXECUTING STEP 14: STATEMENT OF TRUTH")
-            print("="*50)
-            step14 = Step14StatementOfTruth(automation.driver, personal_data)
-            step14_success = step14.execute()
-            if not step14_success:
-                print("❌ Step 14 failed. Automation completed with errors.")
-            
-            # Summary of results
-            print("\n" + "="*50)
-            print("AUTOMATION SUMMARY")
-            print("="*50)
-            print(f"Step 1 (Landing Page): {'✅ SUCCESS' if step1_success else '❌ FAILED'}")
-            print(f"Step 2 (What You Need): {'✅ SUCCESS' if step2_success else '❌ FAILED'}")
-            print(f"Step 3 (Eligibility Requirements): {'✅ SUCCESS' if step3_success else '❌ FAILED'}")
-            print(f"Step 4 (Travel Plans): {'✅ SUCCESS' if step4_success else '❌ FAILED'}")
-            print(f"Step 5 (Terms and Conditions): {'✅ SUCCESS' if step5_success else '❌ FAILED'}")
-            print(f"Step 6 (What Are You Renewing): {'✅ SUCCESS' if step6_success else '❌ FAILED'}")
-            print(f"Step 7 (Passport Photo Upload): {'✅ SUCCESS' if step7_success else '❌ FAILED'}")
-            print(f"Step 8 (Personal Information): {'✅ SUCCESS' if step8_success else '❌ FAILED'}")
-            print(f"Step 9 (Emergency Contact): {'✅ SUCCESS' if step9_success else '❌ FAILED'}")
-            print(f"Step 10 (Passport Options): {'✅ SUCCESS' if step10_success else '❌ FAILED'}")
-            print(f"Step 11 (Mailing Address): {'✅ SUCCESS' if step11_success else '❌ FAILED'}")
-            print(f"Step 12 (Passport Delivery): {'✅ SUCCESS' if step12_success else '❌ FAILED'}")
-            print(f"Step 13 (Review Order): {'✅ SUCCESS' if step13_success else '❌ FAILED'}")
-            print(f"Step 14 (Statement of Truth): {'✅ SUCCESS' if step14_success else '❌ FAILED'}")
-            
-            if all([step1_success, step2_success, step3_success, step4_success, step5_success, step6_success, step7_success, step8_success, step9_success, step10_success, step11_success, step12_success, step13_success, step14_success]):
-                print("\n🎉 ALL STEPS COMPLETED SUCCESSFULLY!")
-            else:
-                print(f"\n⚠️  AUTOMATION COMPLETED WITH {sum([step1_success, step2_success, step3_success, step4_success, step5_success, step6_success, step7_success, step8_success, step9_success, step10_success, step11_success, step12_success, step13_success, step14_success])}/14 STEPS SUCCESSFUL")
-            print("="*50)
-            
-        else:
+        if not automation.navigate_to_url(target_url):
             print(f"Failed to navigate to {target_url}")
+            return
+            
+        print(f"Successfully navigated to {target_url}")
+        
+        # Get page information
+        page_info = automation.get_page_info()
+        if page_info:
+            print(f"Page Title: {page_info['title']}")
+            print(f"Current URL: {page_info['url']}")
+        
+        # Wait 30 seconds after initial navigation
+        print("\nWaiting 30 seconds after navigation...")
+        time.sleep(30)
+        
+        # Process each passport application
+        total_apps = len(passport_data_list)
+        for index, passport_data in enumerate(passport_data_list):
+            app_results = process_single_application(
+                automation.driver, 
+                passport_data, 
+                index, 
+                total_apps
+            )
+            data = passport_data.get('data', {})
+            all_applications_results.append({
+                'index': index + 1,
+                'name': f"{data.get('first_name', 'Unknown')} {data.get('last_name', 'Unknown')}",
+                'success': app_results.get('success', False),
+                'failed_step': app_results.get('failed_step'),
+                'error': app_results.get('error'),
+                'results': app_results.get('results', {})
+            })
+            
+            # If not the last application, navigate back to start for next one
+            if index < total_apps - 1:
+                print("\n" + ">"*50)
+                print(f"Preparing for next application ({index + 2}/{total_apps})...")
+                print(">"*50)
+                time.sleep(5)
+                # Navigate back to the starting page for the next application
+                automation.navigate_to_url(target_url)
+                time.sleep(10)
+        
+        # Print final overall summary
+        print("\n" + "="*70)
+        print("=" * 70)
+        print("FINAL SUMMARY - ALL APPLICATIONS")
+        print("=" * 70)
+        print("="*70 + "\n")
+        
+        total_successful_apps = 0
+        total_failed_apps = 0
+        for app_result in all_applications_results:
+            if app_result['success']:
+                status = "✅ COMPLETE"
+                total_successful_apps += 1
+            else:
+                failed_step = app_result.get('failed_step', 'Unknown')
+                error_code = app_result.get('error', {}).get('code', 'Unknown')
+                status = f"❌ FAILED at Step {failed_step} ({error_code})"
+                total_failed_apps += 1
+            
+            print(f"Application {app_result['index']}: {app_result['name']} - {status}")
+        
+        print("\n" + "="*70)
+        print(f"Total Applications Processed: {len(all_applications_results)}")
+        print(f"Successful: {total_successful_apps}")
+        print(f"Failed: {total_failed_apps}")
+        print("="*70)
     
     except Exception as e:
         logger.error(f"Error in main automation: {str(e)}")
@@ -436,7 +591,7 @@ def main():
     
     finally:
         # Don't close the driver - keep browser open as requested
-        print("Automation completed! Browser will remain open.")
+        print("\nAutomation completed! Browser will remain open.")
 
 
 if __name__ == "__main__":

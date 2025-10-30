@@ -67,12 +67,17 @@ class Step5TermsAndConditions(BaseStep):
                     'message': 'Failed to click Continue button'
                 }
             
-            logger.info("✅ Step 5 completed successfully - Terms and conditions accepted")
-            
-            # Wait 5 seconds as requested
-            logger.info("Waiting 5 seconds...")
+            # Wait 5 seconds after clicking button
+            logger.info("Waiting 5 seconds after clicking Continue...")
             time.sleep(5)
             
+            # Check for errors after clicking continue
+            logger.info("Checking for errors after clicking Continue...")
+            error_result = self.check_for_page_errors("STEP5")
+            if error_result:
+                return error_result
+            
+            logger.info("✅ Step 5 completed successfully - Terms and conditions accepted")
             return {
                 'status': True,
                 'code': 'SUCCESS',

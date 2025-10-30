@@ -47,8 +47,14 @@ class Step10PassportOptions(BaseStep):
                     'message': 'Failed to click Continue button'
                 }
             
-            # Small delay to allow next page to load
+            # Wait 5 seconds after clicking button
             time.sleep(5)
+            
+            # Check for errors after clicking continue
+            logger.info("Checking for errors after clicking Continue...")
+            error_result = self.check_for_page_errors("STEP10")
+            if error_result:
+                return error_result
             
             logger.info("✅ Step 10 completed successfully - Passport options page submitted")
             return {
