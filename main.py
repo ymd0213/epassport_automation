@@ -302,7 +302,7 @@ def update_application_status(application_id, renewal_status, renewal_error=None
     
     Args:
         application_id: The application ID
-        renewal_status: "1" for failed, "2" for success
+        renewal_status: "2" for error in steps 1-14, "3" for error in step 15, "5" for success
         renewal_error: Dict with code and message (optional, for failures)
         
     Returns:
@@ -444,7 +444,11 @@ def process_single_application(driver, passport_data, app_index, total_apps):
             print("="*50)
             
             # Update backend with failure status
-            update_application_status(application_id, "1", failed_error)
+            # Steps 1-14: renewal_status = "2", Step 15: renewal_status = "3"
+            if failed_step == 15:
+                update_application_status(application_id, "3", failed_error)
+            else:
+                update_application_status(application_id, "2", failed_error)
             
             return {
                 'success': False,
@@ -457,7 +461,7 @@ def process_single_application(driver, passport_data, app_index, total_apps):
             print("="*50)
             
             # Update backend with success status
-            update_application_status(application_id, "2")
+            update_application_status(application_id, "5")
             
             return {
                 'success': True,
@@ -469,11 +473,21 @@ def process_single_application(driver, passport_data, app_index, total_apps):
         print(f"❌ Error processing application {app_index + 1}: {str(e)}")
         
         # Update backend with exception error
+        # For exceptions, determine which step we were on based on results
         exception_error = {
             "code": "APPLICATION_EXCEPTION",
             "message": f"Error processing application: {str(e)}"
         }
-        update_application_status(application_id, "1", exception_error)
+        # Check if we have results to determine the last attempted step
+        if results:
+            last_step = max([int(k.replace('step', '')) for k in results.keys() if k.startswith('step')])
+            if last_step == 15:
+                update_application_status(application_id, "3", exception_error)
+            else:
+                update_application_status(application_id, "2", exception_error)
+        else:
+            # If no steps completed, default to steps 1-14 error
+            update_application_status(application_id, "2", exception_error)
         
         return {
             'success': False,
