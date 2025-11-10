@@ -231,19 +231,41 @@ class Step15Payment(BaseStep):
             # Wait for page to load
             self.wait_for_page_load()
             
-            # Mock payment data (since payment info is not in API data)
-            mock_payment_data = {
-                "payment_option": "3",
-                "cardholder_name": "Hunter Johnson",
-                "cc_number": "376743655814011",
-                "cc_exp_month": "8",
-                "cc_exp_year": "30",
-                "cc_cvv": "1345"
-            }
+            # Get billing info from payment data
+            billing_info = self.payment_data.get('billing_info', {})
             
-            # Use mock data for payment (API doesn't provide payment info)
-            # If payment data exists in self.payment_data, it will override mock data
-            payment_info = {**mock_payment_data, **{k: v for k, v in self.payment_data.items() if k in mock_payment_data}}
+            # If billing_info is a string (JSON), parse it
+            if isinstance(billing_info, str):
+                import json
+                try:
+                    billing_info = json.loads(billing_info)
+                except:
+                    logger.error("Failed to parse billing_info JSON string")
+                    billing_info = {}
+            
+            # Validate that we have the required billing information
+            if not billing_info:
+                logger.error("No billing_info found in payment data")
+                return {
+                    'status': False,
+                    'code': 'BILLING_INFO_MISSING',
+                    'message': 'No billing_info found in payment data'
+                }
+            
+            # Use billing_info from API
+            payment_info = billing_info
+            
+            # Validate required fields
+            required_fields = ['cardholder_name', 'cc_number', 'cc_exp_month', 'cc_exp_year', 'cc_cvv', 'payment_option']
+            missing_fields = [field for field in required_fields if not payment_info.get(field)]
+            
+            if missing_fields:
+                logger.error(f"Missing required billing fields: {', '.join(missing_fields)}")
+                return {
+                    'status': False,
+                    'code': 'BILLING_INFO_INCOMPLETE',
+                    'message': f'Missing required billing fields: {", ".join(missing_fields)}'
+                }
             
             # Split cardholder name into first and last name
             cardholder_name = payment_info.get('cardholder_name', '')

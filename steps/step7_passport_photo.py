@@ -6,6 +6,8 @@ Handles passport photo upload and form submission
 import time
 import logging
 import os
+import requests
+import tempfile
 from .base_step import BaseStep
 
 logger = logging.getLogger(__name__)
@@ -14,8 +16,9 @@ logger = logging.getLogger(__name__)
 class Step7PassportPhoto(BaseStep):
     """Step 7: Passport photo upload page automation"""
     
-    def __init__(self, driver):
+    def __init__(self, driver, passport_data=None):
         super().__init__(driver, "Step 7: Passport Photo Upload")
+        self.passport_data = passport_data or {}
         
         # Initial Continue button selector - more specific to avoid other buttons
         self.initial_continue_button = {
@@ -44,6 +47,45 @@ class Step7PassportPhoto(BaseStep):
             'xpath': '//button[@type="submit" and @data-testid="button" and contains(@class, "padding-y-2") and not(@disabled)]',
             'data_testid': 'button'
         }
+    
+    def download_photo_from_url(self, photo_url):
+        """
+        Download photo from URL and save to temporary file
+        
+        Args:
+            photo_url (str): URL of the photo to download
+            
+        Returns:
+            str: Path to downloaded file, or None if download failed
+        """
+        try:
+            logger.info(f"Downloading photo from URL: {photo_url}")
+            
+            # Download the image
+            response = requests.get(photo_url, timeout=30)
+            response.raise_for_status()
+            
+            # Get file extension from URL or content type
+            content_type = response.headers.get('content-type', '')
+            if 'image/jpeg' in content_type or 'image/jpg' in content_type:
+                extension = '.jpg'
+            elif 'image/png' in content_type:
+                extension = '.png'
+            else:
+                # Try to get extension from URL
+                extension = os.path.splitext(photo_url)[1] or '.jpg'
+            
+            # Create temporary file
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=extension)
+            temp_file.write(response.content)
+            temp_file.close()
+            
+            logger.info(f"✅ Photo downloaded successfully to: {temp_file.name}")
+            return temp_file.name
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to download photo from URL: {str(e)}")
+            return None
     
     def find_and_upload_file(self, file_path, description="file upload"):
         """
@@ -134,9 +176,38 @@ class Step7PassportPhoto(BaseStep):
             
             # Upload passport photo
             logger.info("Uploading passport photo...")
-            photo_path = "accept-man.jpg"
+            
+            # Get photo URL from passport data
+            photo_url = self.passport_data.get('photo_url')
+            photo_path = None
+            temp_photo_path = None
+            
+            if photo_url:
+                logger.info(f"Photo URL provided: {photo_url}")
+                # Download photo from URL
+                temp_photo_path = self.download_photo_from_url(photo_url)
+                if temp_photo_path:
+                    photo_path = temp_photo_path
+                else:
+                    logger.error("Failed to download photo from URL")
+                    return {
+                        'status': False,
+                        'code': 'PHOTO_DOWNLOAD_FAILED',
+                        'message': f'Failed to download photo from URL: {photo_url}'
+                    }
+            else:
+                # Fallback to local file if no URL provided
+                logger.warning("No photo_url provided in passport data, using local fallback")
+                photo_path = "accept-man.jpg"
+            
             if not self.find_and_upload_file(photo_path, "passport photo upload"):
                 logger.error("Failed to upload passport photo")
+                # Clean up temp file if it exists
+                if temp_photo_path and os.path.exists(temp_photo_path):
+                    try:
+                        os.unlink(temp_photo_path)
+                    except:
+                        pass
                 return {
                     'status': False,
                     'code': 'STEP7_UPLOAD_FAILED',
@@ -145,6 +216,14 @@ class Step7PassportPhoto(BaseStep):
             
             # Wait for upload to process
             time.sleep(3)
+            
+            # Clean up temporary photo file if it was created
+            if temp_photo_path and os.path.exists(temp_photo_path):
+                try:
+                    os.unlink(temp_photo_path)
+                    logger.info(f"Cleaned up temporary photo file: {temp_photo_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temporary file: {str(e)}")
             
             # Click Continue button after upload
             logger.info("Clicking Continue button after upload...")

@@ -214,8 +214,13 @@ class UndetectedWebAutomation:
             self.driver = None
 
 
-def load_passport_data():
-    """Load passport data from backend API"""
+def fetch_single_passport_application():
+    """
+    Fetch a single passport application from backend API
+    
+    Returns:
+        dict: Application data with 'id' and 'data' keys, or None if no application available
+    """
     try:
         # Load environment variables
         load_dotenv()
@@ -223,54 +228,112 @@ def load_passport_data():
         
         if not api_endpoint:
             logger.error("API_ENDPOINT not found in .env file")
-            return []
+            return None
         
-        logger.info(f"Fetching passport data from API: {api_endpoint}")
+        logger.info(f"Fetching passport application from API: {api_endpoint}")
         
         # Make GET request to the API with timeout
         response = requests.get(api_endpoint, timeout=10)  # 10 second timeout
         response.raise_for_status()
         
+        # Log response status and content type
+        logger.info(f"API response status: {response.status_code}, Content-Type: {response.headers.get('content-type')}")
+        
         # Parse JSON response
-        api_data = response.json()
+        try:
+            api_data = response.json()
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse API response as JSON: {str(e)}")
+            logger.error(f"Response text: {response.text[:500]}")  # Log first 500 chars
+            return None
         
-        if 'data' not in api_data or not isinstance(api_data['data'], list):
-            logger.error("Invalid API response format: 'data' key not found or is not a list")
-            return []
+        # Log the actual response for debugging
+        logger.info(f"API response type: {type(api_data)}")
+        if isinstance(api_data, dict):
+            logger.info(f"API response keys: {list(api_data.keys())}")
         
-        # Get first 5 results
-        first_five = api_data['data'][:5]
-        logger.info(f"Retrieved {len(api_data['data'])} applications from API, using first {len(first_five)}")
+        # Check if API returned an error status (no applications available)
+        if isinstance(api_data, dict) and api_data.get('status') == 'error':
+            message = api_data.get('message', 'Unknown error')
+            logger.info(f"API returned error status: {message}")
+            return None
         
-        # Parse the 'data' field from each application (it's a JSON string)
-        passport_data = []
-        for idx, application in enumerate(first_five):
-            try:
-                if 'data' in application and application['data']:
-                    # Parse the JSON string in the 'data' field
-                    parsed_data = json.loads(application['data'])
-                    # Append both id and parsed data
-                    passport_data.append({
-                        'id': application.get('id'),
-                        'data': parsed_data
-                    })
-                    logger.info(f"Application {idx + 1} (ID: {application.get('id')}): Parsed data for {parsed_data.get('first_name', 'Unknown')} {parsed_data.get('last_name', 'Unknown')}")
+        # Check if response has 'data' key
+        if 'data' not in api_data:
+            logger.error(f"Invalid API response format: 'data' key not found.")
+            if isinstance(api_data, dict):
+                logger.error(f"Response keys: {list(api_data.keys())}")
+                logger.error(f"Response sample: {str(api_data)[:500]}")
+            return None
+        
+        # Handle if 'data' is None or null
+        if api_data['data'] is None:
+            logger.info("API returned null data - no passport applications available")
+            return None
+        
+        # Check if 'data' is a list
+        if not isinstance(api_data['data'], list):
+            logger.error(f"Invalid API response format: 'data' is not a list. Type: {type(api_data['data'])}")
+            logger.error(f"Data value: {str(api_data['data'])[:500]}")
+            
+            # If data is an object with an 'id', try to process it as a single application
+            if isinstance(api_data['data'], dict) and 'id' in api_data['data']:
+                logger.info("API returned single application object instead of array, wrapping it in array")
+                api_data['data'] = [api_data['data']]
+            else:
+                return None
+        
+        # Check if there's any data
+        if len(api_data['data']) == 0:
+            logger.info("No passport applications available in API (empty array)")
+            return None
+        
+        # Get the first application
+        application = api_data['data'][0]
+        
+        # Log what we're processing
+        logger.info(f"Processing application with ID: {application.get('id', 'Unknown')}")
+        
+        try:
+            # Extract and parse the nested 'data' field if it's a JSON string
+            nested_data = application.get('data')
+            if nested_data:
+                # If 'data' is a string, parse it as JSON
+                if isinstance(nested_data, str):
+                    try:
+                        parsed_data = json.loads(nested_data)
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Failed to parse application data field: {str(e)}")
+                        return None
                 else:
-                    logger.warning(f"Application {idx + 1}: No 'data' field found")
-            except json.JSONDecodeError as e:
-                logger.error(f"Application {idx + 1}: Failed to parse data field: {str(e)}")
-            except Exception as e:
-                logger.error(f"Application {idx + 1}: Error processing application: {str(e)}")
-        
-        logger.info(f"Successfully loaded {len(passport_data)} passport applications from API")
-        return passport_data
+                    # If 'data' is already an object, use it directly
+                    parsed_data = nested_data
+                
+                application_id = application.get('id')
+                applicant_name = f"{parsed_data.get('first_name', 'Unknown')} {parsed_data.get('last_name', 'Unknown')}"
+                
+                logger.info(f"Fetched application ID: {application_id}, Applicant: {applicant_name}")
+                
+                # Return the application with parsed data and top-level fields preserved
+                return {
+                    'id': application_id,
+                    'data': parsed_data,
+                    'billing_info': application.get('billing_info'),
+                    'photo_url': application.get('photo_url')
+                }
+            else:
+                logger.warning("Application has no 'data' field")
+                return None
+        except Exception as e:
+            logger.error(f"Failed to process application data: {str(e)}")
+            return None
         
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to fetch data from API: {str(e)}")
-        return []
+        return None
     except Exception as e:
         logger.error(f"Failed to load passport data: {str(e)}")
-        return []
+        return None
 
 def extract_step_result(step_result):
     """
@@ -356,8 +419,19 @@ def process_single_application(driver, passport_data, app_index, total_apps):
     Returns:
         dict: Dictionary containing success status and results for the application
     """
+    # Extract the nested data object
     data = passport_data.get('data', {})
     application_id = passport_data.get('id', 'Unknown')
+    
+    # Merge top-level fields (billing_info, photo_url) into data for easier access in steps
+    # This ensures all steps receive complete data in a single object
+    if 'billing_info' in passport_data:
+        data['billing_info'] = passport_data['billing_info']
+    
+    if 'photo_url' in passport_data:
+        data['photo_url'] = passport_data['photo_url']
+    
+    # Get applicant name for logging
     applicant_name = f"{data.get('first_name', 'Unknown')} {data.get('last_name', 'Unknown')}"
     
     print("\n" + "#"*70)
@@ -379,7 +453,7 @@ def process_single_application(driver, passport_data, app_index, total_apps):
             {"num": 4, "name": "Upcoming Travel", "class": Step4UpcomingTravel, "params": [driver, data]},
             {"num": 5, "name": "Terms and Conditions", "class": Step5TermsAndConditions, "params": [driver]},
             {"num": 6, "name": "What Are You Renewing", "class": Step6WhatAreYouRenewing, "params": [driver, data]},
-            {"num": 7, "name": "Passport Photo Upload", "class": Step7PassportPhoto, "params": [driver]},
+            {"num": 7, "name": "Passport Photo Upload", "class": Step7PassportPhoto, "params": [driver, data]},
             {"num": 8, "name": "Personal Information", "class": Step8PersonalInformation, "params": [driver, data]},
             {"num": 9, "name": "Emergency Contact", "class": Step9EmergencyContact, "params": [driver, data]},
             {"num": 10, "name": "Passport Options", "class": Step10PassportOptions, "params": [driver, data]},
@@ -497,26 +571,23 @@ def process_single_application(driver, passport_data, app_index, total_apps):
 
 
 def main():
-    """Main function to run the undetected automation"""
-    print("Undetected ChromeDriver Web Automation")
+    """Main function to run the undetected automation in continuous loop"""
+    print("Undetected ChromeDriver Web Automation - Continuous Mode")
     print("=" * 50)
     
-    # Load passport data from API
-    passport_data_list = load_passport_data()
-    if not passport_data_list:
-        print("No passport data found. Exiting...")
-        return
-    
-    print(f"Loaded {len(passport_data_list)} passport application(s) from API")
-    
-    # Create automation instance
+    # Create automation instance once
     automation = UndetectedWebAutomation(headless=False)
     
-    # Track overall results
-    all_applications_results = []
+    # Track statistics
+    total_processed = 0
+    total_successful = 0
+    total_failed = 0
     
+    # Target URL
+    target_url = "https://opr.travel.state.gov/"
+    
+    # Setup driver once at the beginning
     try:
-        # Setup driver once for all applications
         if not automation.setup_driver():
             print("Failed to setup undetected ChromeDriver")
             return
@@ -525,8 +596,7 @@ def main():
         print("Waiting 5 seconds before navigation...")
         time.sleep(5)
         
-        # Navigate to the OPR website
-        target_url = "https://opr.travel.state.gov/"
+        # Initial navigation to the OPR website
         if not automation.navigate_to_url(target_url):
             print(f"Failed to navigate to {target_url}")
             return
@@ -540,72 +610,96 @@ def main():
             print(f"Current URL: {page_info['url']}")
         
         # Wait 30 seconds after initial navigation
-        print("\nWaiting 30 seconds after navigation...")
+        print("\nWaiting 30 seconds after initial navigation...")
         time.sleep(30)
         
-        # Process each passport application
-        total_apps = len(passport_data_list)
-        for index, passport_data in enumerate(passport_data_list):
-            app_results = process_single_application(
-                automation.driver, 
-                passport_data, 
-                index, 
-                total_apps
-            )
-            data = passport_data.get('data', {})
-            all_applications_results.append({
-                'index': index + 1,
-                'name': f"{data.get('first_name', 'Unknown')} {data.get('last_name', 'Unknown')}",
-                'success': app_results.get('success', False),
-                'failed_step': app_results.get('failed_step'),
-                'error': app_results.get('error'),
-                'results': app_results.get('results', {})
-            })
-            
-            # If not the last application, navigate back to start for next one
-            if index < total_apps - 1:
+        print("\n" + "="*70)
+        print("🔄 STARTING CONTINUOUS APPLICATION PROCESSING")
+        print("="*70)
+        print("The system will continuously check for new applications from the API.")
+        print("Press Ctrl+C to stop the automation.\n")
+        
+        # Infinite loop to process applications
+        while True:
+            try:
+                print("\n" + ">"*70)
+                print(f"📡 Fetching next application from API...")
+                print(">"*70)
+                
+                # Fetch single application from API
+                passport_data = fetch_single_passport_application()
+                
+                if not passport_data:
+                    print("⏸️  No application data available from API")
+                    print("⏳ Waiting 60 seconds before next check...")
+                    time.sleep(60)
+                    continue
+                
+                # Process the application
+                total_processed += 1
+                app_results = process_single_application(
+                    automation.driver, 
+                    passport_data, 
+                    total_processed - 1,  # 0-based index
+                    total_processed  # Display current count as total
+                )
+                
+                # Update statistics
+                if app_results.get('success', False):
+                    total_successful += 1
+                else:
+                    total_failed += 1
+                
+                # Print current session statistics
+                print("\n" + "="*70)
+                print("📊 SESSION STATISTICS")
+                print("="*70)
+                print(f"Total Processed: {total_processed}")
+                print(f"Successful: {total_successful} ✅")
+                print(f"Failed: {total_failed} ❌")
+                print("="*70)
+                
+                # Navigate back to start for next application
                 print("\n" + ">"*50)
-                print(f"Preparing for next application ({index + 2}/{total_apps})...")
+                print("🔄 Preparing for next application...")
                 print(">"*50)
                 time.sleep(5)
-                # Navigate back to the starting page for the next application
                 automation.navigate_to_url(target_url)
                 time.sleep(10)
-        
-        # Print final overall summary
-        print("\n" + "="*70)
-        print("=" * 70)
-        print("FINAL SUMMARY - ALL APPLICATIONS")
-        print("=" * 70)
-        print("="*70 + "\n")
-        
-        total_successful_apps = 0
-        total_failed_apps = 0
-        for app_result in all_applications_results:
-            if app_result['success']:
-                status = "✅ COMPLETE"
-                total_successful_apps += 1
-            else:
-                failed_step = app_result.get('failed_step', 'Unknown')
-                error_code = app_result.get('error', {}).get('code', 'Unknown')
-                status = f"❌ FAILED at Step {failed_step} ({error_code})"
-                total_failed_apps += 1
-            
-            print(f"Application {app_result['index']}: {app_result['name']} - {status}")
-        
-        print("\n" + "="*70)
-        print(f"Total Applications Processed: {len(all_applications_results)}")
-        print(f"Successful: {total_successful_apps}")
-        print(f"Failed: {total_failed_apps}")
-        print("="*70)
+                
+            except KeyboardInterrupt:
+                print("\n\n" + "="*70)
+                print("⚠️  Keyboard interrupt detected. Stopping automation...")
+                print("="*70)
+                break
+                
+            except Exception as e:
+                logger.error(f"Error in main loop: {str(e)}")
+                print(f"❌ Error in main loop: {str(e)}")
+                print("⏳ Waiting 60 seconds before retry...")
+                time.sleep(60)
+                # Try to recover by navigating back to start
+                try:
+                    automation.navigate_to_url(target_url)
+                    time.sleep(10)
+                except:
+                    pass
     
     except Exception as e:
-        logger.error(f"Error in main automation: {str(e)}")
-        print(f"An error occurred: {str(e)}")
+        logger.error(f"Critical error in automation: {str(e)}")
+        print(f"❌ Critical error occurred: {str(e)}")
     
     finally:
-        # Don't close the driver - keep browser open as requested
-        print("\nAutomation completed! Browser will remain open.")
+        # Print final summary
+        print("\n" + "="*70)
+        print("🏁 FINAL SESSION SUMMARY")
+        print("="*70)
+        print(f"Total Applications Processed: {total_processed}")
+        print(f"Successful: {total_successful} ✅")
+        print(f"Failed: {total_failed} ❌")
+        print("="*70)
+        print("\n⚠️  Browser will remain open. Close manually if needed.")
+        logger.info(f"Automation session ended. Processed: {total_processed}, Success: {total_successful}, Failed: {total_failed}")
 
 
 if __name__ == "__main__":
