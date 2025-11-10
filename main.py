@@ -632,7 +632,7 @@ def main():
                 if not passport_data:
                     print("⏸️  No application data available from API")
                     print("⏳ Waiting 60 seconds before next check...")
-                    time.sleep(60)
+                    time.sleep(20)
                     continue
                 
                 # Process the application
@@ -677,7 +677,7 @@ def main():
                 logger.error(f"Error in main loop: {str(e)}")
                 print(f"❌ Error in main loop: {str(e)}")
                 print("⏳ Waiting 60 seconds before retry...")
-                time.sleep(60)
+                time.sleep(20)
                 # Try to recover by navigating back to start
                 try:
                     automation.navigate_to_url(target_url)
