@@ -631,7 +631,7 @@ def main():
                 
                 if not passport_data:
                     print("⏸️  No application data available from API")
-                    print("⏳ Waiting 60 seconds before next check...")
+                    print("⏳ Waiting 20 seconds before next check...")
                     time.sleep(20)
                     continue
                 
@@ -676,7 +676,7 @@ def main():
             except Exception as e:
                 logger.error(f"Error in main loop: {str(e)}")
                 print(f"❌ Error in main loop: {str(e)}")
-                print("⏳ Waiting 60 seconds before retry...")
+                print("⏳ Waiting 20 seconds before retry...")
                 time.sleep(20)
                 # Try to recover by navigating back to start
                 try:
