@@ -268,7 +268,7 @@ class Step7PassportPhoto(BaseStep):
                     logger.debug(f"Final Continue button not found on attempt {attempt + 1}: {e}")
                 
                 if attempt < 2:  # Don't sleep after the last attempt
-                    time.sleep(2)
+                    time.sleep(0.5)
             
             # If we get here, no final Continue button was found - check for photo error
             logger.info("Final Continue button not found, checking for photo error...")

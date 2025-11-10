@@ -5,9 +5,11 @@ A Python-based web automation framework using Undetected ChromeDriver for automa
 ## Features
 
 - **Undetected Automation**: Uses undetected_chromedriver to avoid detection
-- **Multi-Application Processing**: Process multiple passport applications in sequence
+- **Continuous Processing**: Runs in an infinite loop, continuously checking for new applications
+- **Single Application Workflow**: Fetches and processes one application at a time from the API
+- **Smart Waiting**: Automatically waits 60 seconds when no applications are available
 - **Error Handling**: Comprehensive logging and error management with backend status updates
-- **Step-by-Step Execution**: 14 automated steps covering the entire renewal process
+- **Step-by-Step Execution**: 15 automated steps covering the entire renewal process (including payment)
 - **Backend Integration**: Automatic status updates via REST API
 - **Failure Handling**: Stops processing and reports errors for failed applications
 
@@ -36,11 +38,14 @@ python main.py
 ```
 
 The script will:
-1. Fetch passport applications from the backend API (first 5)
-2. Process each application through all 14 steps
-3. Stop processing if any step fails and update the backend with error details
-4. Update the backend with success status if all steps pass
-5. Move to the next application
+1. Set up ChromeDriver and navigate to the OPR website once
+2. Run in a continuous loop:
+   - Fetch a single passport application from the backend API
+   - If no application available, wait 60 seconds and check again
+   - Process the application through all 15 steps
+   - Update the backend with appropriate status (success or failure)
+   - Navigate back to the start page for the next application
+3. Continue until manually stopped (Ctrl+C)
 
 ### Automation Steps
 
@@ -60,8 +65,33 @@ The automation executes the following steps for each application:
 12. Passport Delivery
 13. Review Order
 14. Statement of Truth
+15. Payment
 
 ## Backend API Integration
+
+### Data Fetch API
+
+The script continuously fetches passport applications from the backend in a loop.
+
+**Endpoint**: `API_ENDPOINT`  
+**Method**: `GET`
+
+**Expected Response**:
+```json
+{
+  "data": [
+    {
+      "id": "12312",
+      "data": "{...passport application data as JSON string...}"
+    }
+  ]
+}
+```
+
+**Behavior**:
+- The script fetches **one application at a time** (first item in the array)
+- If `data` array is empty or no applications available, the script waits 60 seconds before checking again
+- After processing, the script fetches the next application
 
 ### Status Update API
 
@@ -74,22 +104,32 @@ After processing each application, the script automatically updates the backend 
 ```json
 {
   "id": "12312",
-  "renewal_status": "2"
+  "renewal_status": "5"
 }
 ```
 
-**Request Body (Failure)**:
+**Request Body (Failure in Steps 1-14)**:
 ```json
 {
   "id": "12312",
-  "renewal_status": "1",
+  "renewal_status": "2",
   "renewal_error": "{\"code\": \"TRAVEL_PLANS_ERROR\", \"message\": \"Your travel is before the expected arrival of your new passport.\"}"
 }
 ```
 
+**Request Body (Failure in Step 15 - Payment)**:
+```json
+{
+  "id": "12312",
+  "renewal_status": "3",
+  "renewal_error": "{\"code\": \"PAYMENT_ERROR\", \"message\": \"Payment processing failed.\"}"
+}
+```
+
 **Status Codes**:
-- `"1"` - Application failed (error details provided in `renewal_error`)
-- `"2"` - Application completed successfully
+- `"2"` - Application failed in steps 1-14 (error details provided in `renewal_error`)
+- `"3"` - Application failed in step 15 (Payment) (error details provided in `renewal_error`)
+- `"5"` - Application completed successfully
 
 **Error Codes**:
 - `TRAVEL_PLANS_ERROR` - Travel date conflicts detected
@@ -97,26 +137,7 @@ After processing each application, the script automatically updates the backend 
 - `CONTINUE_BUTTON_DISABLED` - Form validation failed
 - `STEP_FAILED` - Generic step failure
 - `APPLICATION_EXCEPTION` - Unexpected error during processing
-
-### Data Fetch API
-
-The script fetches passport applications from the backend at startup.
-
-**Endpoint**: `API_ENDPOINT`  
-**Method**: `GET`
-
-**Expected Response**:
-```json
-{
-  "data": [
-    {
-      "id": "12312",
-      "data": "{...passport application data as JSON string...}"
-    },
-    ...
-  ]
-}
-```
+- `PAYMENT_ERROR` - Payment processing failed
 
 ## Error Handling and Flow Control
 
@@ -126,17 +147,70 @@ When any step fails during processing:
 1. The error code and message are captured from the step result
 2. Processing stops immediately for that application (remaining steps are skipped)
 3. The backend is notified via POST to `API_ENDPOINT` with:
-   - `renewal_status`: `"1"` (failed)
+   - For failures in steps 1-14: `renewal_status`: `"2"` (failed)
+   - For failures in step 15 (Payment): `renewal_status`: `"3"` (payment failed)
    - `renewal_error`: JSON string containing `code` and `message`
-4. The automation moves to the next application in the queue
+4. The script navigates back to the start page and fetches the next application
 
 ### Success Behavior
 
-When all 14 steps complete successfully:
+When all 15 steps complete successfully:
 1. The backend is notified via POST to `API_ENDPOINT` with:
-   - `renewal_status`: `"2"` (success)
+   - `renewal_status`: `"5"` (success)
    - No `renewal_error` field
-2. The automation moves to the next application in the queue
+2. The script navigates back to the start page and fetches the next application
+
+### No Data Available Behavior
+
+When no application data is available from the API:
+1. The script logs "No application data available from API"
+2. Waits 60 seconds
+3. Checks the API again for new applications
+4. Continues this cycle until new data is available or the script is stopped (Ctrl+C)
+
+## Required Data Fields in API Response
+
+The passport application data must include the following fields:
+
+### Personal Information Fields
+Standard fields like `first_name`, `last_name`, `email`, address fields, etc.
+
+### Photo URL (Required)
+- **Field**: `photo_url`
+- **Type**: String (URL)
+- **Description**: Direct URL to the passport photo image
+- **Supported formats**: JPEG, JPG, PNG
+- **Example**: `"https://example.com/photos/passport-photo.jpg"`
+- **Behavior**: The script will download the photo from this URL and upload it in Step 7
+
+### Billing Information (Required)
+- **Field**: `billing_info`
+- **Type**: Object or JSON string
+- **Description**: Payment/billing information for Step 15 (Payment)
+- **Required subfields**:
+  - `cardholder_name`: Full name on the card (e.g., "John Smith")
+  - `cc_number`: Credit card number without spaces (e.g., "4111111111111111")
+  - `cc_exp_month`: Expiration month as number (e.g., "8" for August)
+  - `cc_exp_year`: Expiration year last 2 digits (e.g., "30" for 2030)
+  - `cc_cvv`: Security code (e.g., "123")
+  - `payment_option`: Card type index as string (e.g., "3" for American Express)
+    - "0" = Select card type (default/placeholder)
+    - "1" = Visa
+    - "2" = Mastercard
+    - "3" = American Express
+    - "4" = Discover
+
+**Example billing_info object**:
+```json
+{
+  "cardholder_name": "John Smith",
+  "cc_number": "376743655814011",
+  "cc_exp_month": "8",
+  "cc_exp_year": "30",
+  "cc_cvv": "1345",
+  "payment_option": "3"
+}
+```
 
 ### Step Result Format
 

@@ -411,7 +411,7 @@ class Step8PersonalInformation(BaseStep):
                 # Clear and type the country name to trigger dropdown
                 combo_input.clear()
                 combo_input.send_keys(country_name)
-                time.sleep(2)  # Wait for dropdown to appear
+                time.sleep(0.5)  # Wait for dropdown to appear
                 
                 # Find and click the option by searching for the option with matching data-value
                 try:
@@ -460,7 +460,7 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_input_text(self.first_name, first_name, "first name"):
                     logger.error("Failed to input first name")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Handle former name logic
             former_name = self.passport_data.get('former__name', '')
@@ -477,7 +477,7 @@ class Step8PersonalInformation(BaseStep):
                     if not self.find_and_input_text(self.former_name_a, former_name_a, "former name A"):
                         logger.error("Failed to input former name A")
                         return False
-                    time.sleep(2)
+                    time.sleep(0.5)
                 
                 # Fill former name B
                 former_name_b = self.passport_data.get('former_name_b', '')
@@ -485,7 +485,7 @@ class Step8PersonalInformation(BaseStep):
                     if not self.find_and_input_text(self.former_name_b, former_name_b, "former name B"):
                         logger.error("Failed to input former name B")
                         return False
-                    time.sleep(2)
+                    time.sleep(0.5)
                 
                 # Click Add Name button
                 if not self.find_and_click_button(self.add_name_button, "Add Name button"):
@@ -507,7 +507,7 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_input_text(self.phone_number, phone_number, "phone number"):
                     logger.error("Failed to input phone number")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Fill email addresses
             logger.info("Filling email addresses...")
@@ -516,12 +516,12 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_input_text(self.email_address, email, "email address"):
                     logger.error("Failed to input email address")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
                 
                 if not self.find_and_input_text(self.email_verify, email, "email verification"):
                     logger.error("Failed to input email verification")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Fill SSN (merge ssn_1, ssn_2, ssn_3)
             logger.info("Filling SSN...")
@@ -534,12 +534,12 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_input_text(self.ssn, full_ssn, "SSN"):
                     logger.error("Failed to input SSN")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
                 
                 if not self.find_and_input_text(self.ssn_verify, full_ssn, "SSN verification"):
                     logger.error("Failed to input SSN verification")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Click Add Address button
             logger.info("Clicking Add Address button...")
@@ -566,7 +566,7 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_input_text(self.address_1, address_1, "address 1"):
                     logger.error("Failed to input address 1")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Address 2
             if permanent_address_same == "1" or permanent_address_same == 1:
@@ -578,7 +578,7 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_input_text(self.address_2, address_2, "address 2"):
                     logger.error("Failed to input address 2")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Country selection for address
             if permanent_address_same == "1" or permanent_address_same == 1:
@@ -590,7 +590,7 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_select_combo_box_option(self.address_country, country_code, "address country"):
                     logger.error("Failed to select address country")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # City
             if permanent_address_same == "1" or permanent_address_same == 1:
@@ -602,7 +602,7 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_input_text(self.address_city, city, "address city"):
                     logger.error("Failed to input address city")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # State selection
             if permanent_address_same == "1" or permanent_address_same == 1:
@@ -614,7 +614,7 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_select_option(self.address_state, state, "address state"):
                     logger.error("Failed to select address state")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # ZIP code
             if permanent_address_same == "1" or permanent_address_same == 1:
@@ -626,7 +626,7 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_input_text(self.address_zip, zip_code, "address ZIP"):
                     logger.error("Failed to input address ZIP")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Click Add Address submit button
             if not self.find_and_click_button(self.add_address_submit, "Add Address submit button"):
@@ -658,7 +658,7 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_select_combo_box_option(self.place_of_birth_country, country_birth, "place of birth country"):
                     logger.error("Failed to select place of birth country")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # State of birth (combo box by name)
             state_birth = self.passport_data.get('state_birth', '')
@@ -666,7 +666,7 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_select_combo_box(self.state_of_birth, state_birth, "state of birth"):
                     logger.error("Failed to select state of birth")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # City of birth
             city_birth = self.passport_data.get('city_birth', '')
@@ -674,7 +674,7 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_input_text(self.city_of_birth, city_birth, "city of birth"):
                     logger.error("Failed to input city of birth")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Fill personal details
             logger.info("Filling personal details...")
@@ -692,7 +692,7 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_select_option(self.gender, gender_value, "gender"):
                     logger.error("Failed to select gender")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Eye color (convert index to option value)
             eye_color_index = self.passport_data.get('eye_color', '')
@@ -704,7 +704,7 @@ class Step8PersonalInformation(BaseStep):
                         if not self.find_and_select_option(self.eye_color, eye_color_value, "eye color"):
                             logger.error("Failed to select eye color")
                             return False
-                        time.sleep(2)
+                        time.sleep(0.5)
                 except (ValueError, IndexError):
                     logger.warning(f"Invalid eye color index: {eye_color_index}")
             
@@ -718,7 +718,7 @@ class Step8PersonalInformation(BaseStep):
                         if not self.find_and_select_option(self.hair_color, hair_color_value, "hair color"):
                             logger.error("Failed to select hair color")
                             return False
-                        time.sleep(2)
+                        time.sleep(0.5)
                 except (ValueError, IndexError):
                     logger.warning(f"Invalid hair color index: {hair_color_index}")
             
@@ -728,7 +728,7 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_select_option(self.height_feet, str(height_ft), "height feet"):
                     logger.error("Failed to select height feet")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Height inches
             height_in = self.passport_data.get('height_in', '')
@@ -736,7 +736,7 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_select_option(self.height_inches, str(height_in), "height inches"):
                     logger.error("Failed to select height inches")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Occupation
             occupation = self.passport_data.get('occupation', '')
@@ -744,7 +744,7 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_input_text(self.occupation, occupation, "occupation"):
                     logger.error("Failed to input occupation")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Employer or school
             employer_or_school = self.passport_data.get('employer_or_school', '')
@@ -752,7 +752,7 @@ class Step8PersonalInformation(BaseStep):
                 if not self.find_and_input_text(self.employer_or_school, employer_or_school, "employer or school"):
                     logger.error("Failed to input employer or school")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Click Continue button
             logger.info("Clicking Continue button...")

@@ -285,7 +285,7 @@ class Step15Payment(BaseStep):
                     'code': 'FIRST_NAME_INPUT_FAILED',
                     'message': 'Failed to input first name'
                 }
-            time.sleep(2)  # 2 second delay after input
+            time.sleep(0.5)  # 2 second delay after input
             
             # Fill in last name
             logger.info("Filling in account holder last name...")
@@ -296,7 +296,7 @@ class Step15Payment(BaseStep):
                     'code': 'LAST_NAME_INPUT_FAILED',
                     'message': 'Failed to input last name'
                 }
-            time.sleep(2)  # 2 second delay after input
+            time.sleep(0.5)  # 2 second delay after input
             
             # Select card type using payment_option as index (not value)
             payment_option = payment_info.get('payment_option', '0')
@@ -311,7 +311,7 @@ class Step15Payment(BaseStep):
                     'code': 'CARD_TYPE_SELECT_FAILED',
                     'message': 'Failed to select card type'
                 }
-            time.sleep(2)  # 2 second delay after select
+            time.sleep(0.5)  # 2 second delay after select
             
             # Fill in card number (use custom method to handle auto-formatting)
             cc_number = str(payment_info.get('cc_number', ''))
@@ -323,7 +323,7 @@ class Step15Payment(BaseStep):
                     'code': 'CARD_NUMBER_INPUT_FAILED',
                     'message': 'Failed to input card number'
                 }
-            time.sleep(2)  # 2 second delay after input
+            time.sleep(0.5)  # 2 second delay after input
             
             # Fill in security code
             cc_cvv = str(payment_info.get('cc_cvv', ''))
@@ -335,7 +335,7 @@ class Step15Payment(BaseStep):
                     'code': 'SECURITY_CODE_INPUT_FAILED',
                     'message': 'Failed to input security code'
                 }
-            time.sleep(2)  # 2 second delay after input
+            time.sleep(0.5)  # 2 second delay after input
             
             # Select expiration month - convert from real month number to 0-based index
             cc_exp_month = payment_info.get('cc_exp_month', '')
@@ -349,7 +349,7 @@ class Step15Payment(BaseStep):
                         'code': 'EXP_MONTH_SELECT_FAILED',
                         'message': 'Failed to select expiration month'
                     }
-            time.sleep(2)  # 2 second delay after select
+            time.sleep(0.5)  # 2 second delay after select
             
             # Fill in expiration year
             cc_exp_year = str(payment_info.get('cc_exp_year', ''))
@@ -361,7 +361,7 @@ class Step15Payment(BaseStep):
                     'code': 'EXP_YEAR_INPUT_FAILED',
                     'message': 'Failed to input expiration year'
                 }
-            time.sleep(2)  # 2 second delay after input
+            time.sleep(0.5)  # 2 second delay after input
             
             # Click Submit Order button
             logger.info("Clicking Submit Order button...")

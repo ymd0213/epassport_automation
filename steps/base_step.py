@@ -469,7 +469,7 @@ class BaseStep:
                 # Clear and type country name
                 combo_input.clear()
                 combo_input.send_keys(country_name)
-                time.sleep(2)  # Wait for dropdown to appear
+                time.sleep(0.5)  # Wait for dropdown to appear
                 
                 # Find and click the first option in the dropdown
                 try:

@@ -55,7 +55,7 @@ class Step5TermsAndConditions(BaseStep):
             
             # 2 second delay after checkbox click
             logger.info("Waiting 2 seconds after checkbox click...")
-            time.sleep(2)
+            time.sleep(0.5)
             
             # Click Continue button
             logger.info("Clicking Continue button...")

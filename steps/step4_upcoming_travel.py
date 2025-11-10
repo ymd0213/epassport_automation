@@ -112,14 +112,14 @@ class Step4UpcomingTravel(BaseStep):
                     logger.error("Failed to click Yes radio button")
                     return False
                 
-                time.sleep(2)  # Wait for form fields to appear
+                time.sleep(0.5)  # Wait for form fields to appear
                 
                 # Fill departure date
                 logger.info("Filling departure date...")
                 if not self.find_and_input_text(self.departure_day, str(self.travel_data.get('trip_abroad_day', '')), "departure day"):
                     logger.error("Failed to input departure day")
                     return False
-                time.sleep(2)  # 2 second delay after input
+                time.sleep(0.5)  # 2 second delay after input
                 
                 # Convert month number to 0-based index (January = 0, December = 11)
                 departure_month = self.travel_data.get('trip_abroad_month', '')
@@ -128,12 +128,12 @@ class Step4UpcomingTravel(BaseStep):
                     if not self.find_and_select_option(self.departure_month, month_index, "departure month"):
                         logger.error("Failed to select departure month")
                         return False
-                time.sleep(2)  # 2 second delay after select
+                time.sleep(0.5)  # 2 second delay after select
                 
                 if not self.find_and_input_text(self.departure_year, str(self.travel_data.get('trip_abroad_year', '')), "departure year"):
                     logger.error("Failed to input departure year")
                     return False
-                time.sleep(2)  # 2 second delay after input
+                time.sleep(0.5)  # 2 second delay after input
 
                 # Check for errors after filling departure date
                 logger.info("Checking for errors after filling departure date...")
@@ -146,7 +146,7 @@ class Step4UpcomingTravel(BaseStep):
                 if not self.find_and_input_text(self.return_day, str(self.travel_data.get('trip_return_day', '')), "return day"):
                     logger.error("Failed to input return day")
                     return False
-                time.sleep(2)  # 2 second delay after input
+                time.sleep(0.5)  # 2 second delay after input
                 
                 # Convert month number to 0-based index (January = 0, December = 11)
                 return_month = self.travel_data.get('trip_return_month', '')
@@ -155,12 +155,12 @@ class Step4UpcomingTravel(BaseStep):
                     if not self.find_and_select_option(self.return_month, month_index, "return month"):
                         logger.error("Failed to select return month")
                         return False
-                time.sleep(2)  # 2 second delay after select
+                time.sleep(0.5)  # 2 second delay after select
                 
                 if not self.find_and_input_text(self.return_year, str(self.travel_data.get('trip_return_year', '')), "return year"):
                     logger.error("Failed to input return year")
                     return False
-                time.sleep(2)  # 2 second delay after input
+                time.sleep(0.5)  # 2 second delay after input
                 
                 # Select country
                 logger.info("Selecting travel destination...")
@@ -169,7 +169,7 @@ class Step4UpcomingTravel(BaseStep):
                     if not self.find_and_select_combo_box(self.country_combo, country, "travel destination combo box"):
                         logger.error("Failed to select travel destination")
                         return False
-                    time.sleep(2)  # 2 second delay after combo box selection
+                    time.sleep(0.5)  # 2 second delay after combo box selection
                 else:
                     logger.warning("No travel destination specified")
             
@@ -180,7 +180,7 @@ class Step4UpcomingTravel(BaseStep):
                     logger.error("Failed to click No radio button")
                     return False
             
-            time.sleep(2)  # Wait for form to update
+            time.sleep(0.5)  # Wait for form to update
             
             # Validate Continue button before clicking
             logger.info("Validating Continue button...")

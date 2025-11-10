@@ -159,7 +159,7 @@ class Step6WhatAreYouRenewing(BaseStep):
                 if not self.find_and_click_checkbox(self.renew_book_yes, "renew book Yes radio"):
                     logger.error("Failed to click renew book Yes radio")
                     return False
-                time.sleep(2)  # 1 second delay after input
+                time.sleep(0.5)  # 1 second delay after input
                 
                 # Fill passport book form fields
                 logger.info("Filling passport book information...")
@@ -168,7 +168,7 @@ class Step6WhatAreYouRenewing(BaseStep):
                 if not self.find_and_input_text(self.passport_book_id, recent_book_number, "passport book ID"):
                     logger.error("Failed to input passport book ID")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
                 
                 # Passport book issue date
                 recent_book_issued_day = str(self.passport_data.get('recent_book_issued_day', ''))
@@ -176,7 +176,7 @@ class Step6WhatAreYouRenewing(BaseStep):
                     if not self.find_and_input_text(self.passport_book_issue_day, recent_book_issued_day, "passport book issue day"):
                         logger.error("Failed to input passport book issue day")
                         return False
-                    time.sleep(2)
+                    time.sleep(0.5)
                 
                 recent_book_issued_month = str(self.passport_data.get('recent_book_issued_month', ''))
                 if recent_book_issued_month:
@@ -185,20 +185,20 @@ class Step6WhatAreYouRenewing(BaseStep):
                     if not self.find_and_select_option(self.passport_book_issue_month, month_index, "passport book issue month"):
                         logger.error("Failed to select passport book issue month")
                         return False
-                    time.sleep(2)
+                    time.sleep(0.5)
                 
                 recent_book_issued_year = str(self.passport_data.get('recent_book_issued_year', ''))
                 if recent_book_issued_year:
                     if not self.find_and_input_text(self.passport_book_issue_year, recent_book_issued_year, "passport book issue year"):
                         logger.error("Failed to input passport book issue year")
                         return False
-                    time.sleep(2)
+                    time.sleep(0.5)
             else:
                 logger.info("No recent book number found, clicking No for renew book")
                 if not self.find_and_click_checkbox(self.renew_book_no, "renew book No radio"):
                     logger.error("Failed to click renew book No radio")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Handle recent card number logic
             recent_card_number = self.passport_data.get('recent_card_number', '')
@@ -207,7 +207,7 @@ class Step6WhatAreYouRenewing(BaseStep):
                 if not self.find_and_click_checkbox(self.renew_card_yes, "renew card Yes radio"):
                     logger.error("Failed to click renew card Yes radio")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
                 
                 # Fill passport card form fields
                 logger.info("Filling passport card information...")
@@ -216,7 +216,7 @@ class Step6WhatAreYouRenewing(BaseStep):
                 if not self.find_and_input_text(self.passport_card_id, recent_card_number, "passport card ID"):
                     logger.error("Failed to input passport card ID")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
                 
                 # Passport card issue date (using same date fields as book for now)
                 recent_card_issued_day = str(self.passport_data.get('recent_book_issued_day', ''))
@@ -224,7 +224,7 @@ class Step6WhatAreYouRenewing(BaseStep):
                     if not self.find_and_input_text(self.passport_card_issue_day, recent_card_issued_day, "passport card issue day"):
                         logger.error("Failed to input passport card issue day")
                         return False
-                    time.sleep(2)
+                    time.sleep(0.5)
                 
                 recent_card_issued_month = str(self.passport_data.get('recent_book_issued_month', ''))
                 if recent_card_issued_month:
@@ -233,20 +233,20 @@ class Step6WhatAreYouRenewing(BaseStep):
                     if not self.find_and_select_option(self.passport_card_issue_month, month_index, "passport card issue month"):
                         logger.error("Failed to select passport card issue month")
                         return False
-                    time.sleep(2)
+                    time.sleep(0.5)
                 
                 recent_card_issued_year = str(self.passport_data.get('recent_book_issued_year', ''))
                 if recent_card_issued_year:
                     if not self.find_and_input_text(self.passport_card_issue_year, recent_card_issued_year, "passport card issue year"):
                         logger.error("Failed to input passport card issue year")
                         return False
-                    time.sleep(2)
+                    time.sleep(0.5)
             else:
                 logger.info("No recent card number found, clicking No for renew card")
                 if not self.find_and_click_checkbox(self.renew_card_no, "renew card No radio"):
                     logger.error("Failed to click renew card No radio")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Fill personal information
             logger.info("Filling personal information...")
@@ -257,7 +257,7 @@ class Step6WhatAreYouRenewing(BaseStep):
                 if not self.find_and_input_text(self.surname, last_name, "surname"):
                     logger.error("Failed to input surname")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Date of birth
             year_of_birth = str(self.passport_data.get('year_of_birth', ''))
@@ -265,7 +265,7 @@ class Step6WhatAreYouRenewing(BaseStep):
                 if not self.find_and_input_text(self.date_of_birth_year, year_of_birth, "date of birth year"):
                     logger.error("Failed to input date of birth year")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             month_of_birth = str(self.passport_data.get('month_of_birth', ''))
             if month_of_birth:
@@ -274,14 +274,14 @@ class Step6WhatAreYouRenewing(BaseStep):
                 if not self.find_and_select_option(self.date_of_birth_month, month_index, "date of birth month"):
                     logger.error("Failed to select date of birth month")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             day_of_birth = str(self.passport_data.get('day_of_birth', ''))
             if day_of_birth:
                 if not self.find_and_input_text(self.date_of_birth_day, day_of_birth, "date of birth day"):
                     logger.error("Failed to input date of birth day")
                     return False
-                time.sleep(2)
+                time.sleep(0.5)
             
             # Validate Continue button before clicking
             logger.info("Validating Continue button...")

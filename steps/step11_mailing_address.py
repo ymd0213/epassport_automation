@@ -149,28 +149,28 @@ class Step11MailingAddress(BaseStep):
                     if not self.find_and_input_text(self.mailing_address_1, addr1, "mailing address 1"):
                         logger.error("Failed to input mailing address 1")
                         return False
-                    time.sleep(2)
+                    time.sleep(0.5)
                 
                 city = self.passport_data.get('mailing_city', '')
                 if city:
                     if not self.find_and_input_text(self.mailing_city, city, "mailing city"):
                         logger.error("Failed to input mailing city")
                         return False
-                    time.sleep(2)
+                    time.sleep(0.5)
                 
                 state = self.passport_data.get('mailing_state', '')
                 if state:
                     if not self.find_and_select_option(self.mailing_state, state, "mailing state"):
                         logger.error("Failed to select mailing state")
                         return False
-                    time.sleep(2)
+                    time.sleep(0.5)
                 
                 zip_code = self.passport_data.get('mailing_zip', '')
                 if zip_code:
                     if not self.find_and_input_text(self.mailing_zip, zip_code, "mailing zip"):
                         logger.error("Failed to input mailing zip")
                         return False
-                    time.sleep(2)
+                    time.sleep(0.5)
                 
                 # Click Add Address
                 if not self.find_and_click_button(self.add_address_button, "Add Address button"):

@@ -114,7 +114,7 @@ class Step14StatementOfTruth(BaseStep):
                     'message': 'Failed to click checkbox wrapper'
                 }
             
-            time.sleep(2)  # Brief pause after clicking checkbox
+            time.sleep(0.5)  # Brief pause after clicking checkbox
             
             # Click Continue button
             logger.info("Clicking Continue button on statement of truth page...")
