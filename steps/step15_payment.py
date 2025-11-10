@@ -299,9 +299,10 @@ class Step15Payment(BaseStep):
             time.sleep(0.5)  # 2 second delay after input
             
             # Select card type using payment_option as index (not value)
+            # Note: First option (index 0) is "Select" placeholder, so we add 1 to skip it
             payment_option = payment_info.get('payment_option', '0')
-            payment_option_index = int(payment_option)  # Convert to integer index
-            logger.info(f"Selecting card type with index: {payment_option_index}")
+            payment_option_index = int(payment_option) + 1  # Add 1 to skip "Select" option
+            logger.info(f"Selecting card type with index: {payment_option_index} (payment_option: {payment_option})")
             
             # Select by index (not by value) since payment_option represents position in dropdown
             if not self.select_card_type_by_index(payment_option_index):
