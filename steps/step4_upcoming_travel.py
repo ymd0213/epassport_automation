@@ -120,7 +120,7 @@ class Step4UpcomingTravel(BaseStep):
     
     def execute(self):
         """
-        Execute Step 4: Handle upcoming travel plans based on travel_plans value
+        Execute Step 4: Always select No for upcoming travel plans (ignoring travel_plans data)
         
         Returns:
             bool: True if step completed successfully, False otherwise
@@ -131,90 +131,11 @@ class Step4UpcomingTravel(BaseStep):
             # Wait for page to load
             self.wait_for_page_load()
             
-            travel_plans = str(self.travel_data.get('travel_plans', '0'))
-            logger.info(f"Travel plans value: {travel_plans}")
-            
-            if travel_plans == "1":
-                # User has travel plans - click Yes radio button
-                logger.info("User has travel plans - selecting Yes")
-                if not self.find_and_click_radio(self.yes_radio, "Yes radio button"):
-                    logger.error("Failed to click Yes radio button")
-                    return False
-                
-                time.sleep(0.5)  # Wait for form fields to appear
-                
-                # Fill departure date
-                logger.info("Filling departure date...")
-                if not self.find_and_input_text(self.departure_day, str(self.travel_data.get('trip_abroad_day', '')), "departure day"):
-                    logger.error("Failed to input departure day")
-                    return False
-                time.sleep(0.5)  
-                
-                # Select departure month (data is 1-12, but option values are 0-11)
-                departure_month = self.travel_data.get('trip_abroad_month', '')
-                if departure_month:
-                    month_value = str(int(departure_month) - 1)  # Convert 1-12 to 0-11
-                    if not self.find_and_select_option(self.departure_month, month_value, "departure month"):
-                        logger.error("Failed to select departure month")
-                        return False
-                time.sleep(0.5)  # 2 second delay after select
-                
-                if not self.find_and_input_text(self.departure_year, str(self.travel_data.get('trip_abroad_year', '')), "departure year"):
-                    logger.error("Failed to input departure year")
-                    return False
-                time.sleep(0.5)  
-
-                # Check for errors after filling departure date
-                logger.info("Checking for errors after filling departure date...")
-                error_result = self.check_for_page_errors("STEP4")
-                if error_result:
-                    return error_result
-                
-                # Fill return date
-                logger.info("Filling return date...")
-                if not self.find_and_input_text(self.return_day, str(self.travel_data.get('trip_return_day', '')), "return day"):
-                    logger.error("Failed to input return day")
-                    return False
-                time.sleep(0.5)  
-                
-                # Select return month (data is 1-12, but option values are 0-11)
-                return_month = self.travel_data.get('trip_return_month', '')
-                if return_month:
-                    month_value = str(int(return_month) - 1)  # Convert 1-12 to 0-11
-                    if not self.find_and_select_option(self.return_month, month_value, "return month"):
-                        logger.error("Failed to select return month")
-                        return False
-                time.sleep(0.5)  # 2 second delay after select
-                
-                if not self.find_and_input_text(self.return_year, str(self.travel_data.get('trip_return_year', '')), "return year"):
-                    logger.error("Failed to input return year")
-                    return False
-                time.sleep(0.5)  
-                
-                # Select countries (can be multiple)
-                logger.info("Selecting travel destination(s)...")
-                countries_string = self.travel_data.get('trip_abroad_countries', '')
-                if countries_string:
-                    # Parse countries from string (handles "country1 and country2" or "country1,country2")
-                    countries = self.parse_countries(countries_string)
-                    logger.info(f"Found {len(countries)} country/countries to select: {countries}")
-                    
-                    # Select each country individually
-                    for country in countries:
-                        logger.info(f"Selecting country: {country}")
-                        if not self.find_and_select_combo_box(self.country_combo, country, "travel destination combo box"):
-                            logger.error(f"Failed to select travel destination: {country}")
-                            return False
-                        time.sleep(0.5)  # Small delay after each selection
-                else:
-                    logger.warning("No travel destination specified")
-            
-            else:
-                # User has no travel plans - click No radio button
-                logger.info("User has no travel plans - selecting No")
-                if not self.find_and_click_radio(self.no_radio, "No radio button"):
-                    logger.error("Failed to click No radio button")
-                    return False
+            # Always click No radio button (ignoring travel_plans value)
+            logger.info("Always selecting No for travel plans (ignoring travel_plans data)")
+            if not self.find_and_click_radio(self.no_radio, "No radio button"):
+                logger.error("Failed to click No radio button")
+                return False
             
             time.sleep(0.5)  # Wait for form to update
             
