@@ -5,6 +5,7 @@ Handles travel plans selection and form filling based on travel_plans value
 
 import time
 import logging
+import re
 from .base_step import BaseStep
 
 logger = logging.getLogger(__name__)
@@ -89,6 +90,34 @@ class Step4UpcomingTravel(BaseStep):
             'data_testid': 'button'
         }
     
+    def parse_countries(self, countries_string):
+        """
+        Parse countries string that can be in formats:
+        - "united kingdom and france"
+        - "united kingdom,france"
+        - "united kingdom, france"
+        
+        Args:
+            countries_string (str): String containing one or more countries
+            
+        Returns:
+            list: List of individual country names (stripped and lowercased)
+        """
+        if not countries_string:
+            return []
+        
+        # First, try splitting by " and " (case insensitive)
+        countries = re.split(r'\s+and\s+', countries_string.strip(), flags=re.IGNORECASE)
+        
+        # If we still have just one item, try splitting by comma
+        if len(countries) == 1:
+            countries = [c.strip() for c in countries_string.split(',')]
+        
+        # Clean up each country name (strip whitespace and keep original case for matching)
+        countries = [c.strip() for c in countries if c.strip()]
+        
+        return countries
+    
     def execute(self):
         """
         Execute Step 4: Handle upcoming travel plans based on travel_plans value
@@ -162,14 +191,21 @@ class Step4UpcomingTravel(BaseStep):
                     return False
                 time.sleep(0.5)  
                 
-                # Select country
-                logger.info("Selecting travel destination...")
-                country = self.travel_data.get('trip_abroad_countries', '')
-                if country:
-                    if not self.find_and_select_combo_box(self.country_combo, country, "travel destination combo box"):
-                        logger.error("Failed to select travel destination")
-                        return False
-                    time.sleep(0.5)  # 2 second delay after combo box selection
+                # Select countries (can be multiple)
+                logger.info("Selecting travel destination(s)...")
+                countries_string = self.travel_data.get('trip_abroad_countries', '')
+                if countries_string:
+                    # Parse countries from string (handles "country1 and country2" or "country1,country2")
+                    countries = self.parse_countries(countries_string)
+                    logger.info(f"Found {len(countries)} country/countries to select: {countries}")
+                    
+                    # Select each country individually
+                    for country in countries:
+                        logger.info(f"Selecting country: {country}")
+                        if not self.find_and_select_combo_box(self.country_combo, country, "travel destination combo box"):
+                            logger.error(f"Failed to select travel destination: {country}")
+                            return False
+                        time.sleep(0.5)  # Small delay after each selection
                 else:
                     logger.warning("No travel destination specified")
             

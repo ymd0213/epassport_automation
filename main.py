@@ -202,6 +202,89 @@ class UndetectedWebAutomation:
             logger.error(f"Element not found: {str(e)}")
             return None
     
+    def clear_browser_cache(self):
+        """
+        Clear browser cache, cookies, and storage after each application
+        
+        This includes:
+        - Cookies
+        - Local storage
+        - Session storage
+        - Cache storage
+        """
+        try:
+            if not self.driver:
+                logger.warning("Driver not available for cache clearing")
+                return False
+            
+            logger.info("Clearing browser cache and storage...")
+            
+            # Clear cookies
+            try:
+                self.driver.delete_all_cookies()
+                logger.info("✅ Cookies cleared")
+            except Exception as e:
+                logger.warning(f"Failed to clear cookies: {str(e)}")
+            
+            # Clear local storage, session storage, and cache via JavaScript
+            try:
+                # Execute JavaScript to clear all storage
+                self.driver.execute_script("""
+                    // Clear localStorage
+                    try {
+                        localStorage.clear();
+                        console.log('localStorage cleared');
+                    } catch(e) {
+                        console.log('Error clearing localStorage:', e);
+                    }
+                    
+                    // Clear sessionStorage
+                    try {
+                        sessionStorage.clear();
+                        console.log('sessionStorage cleared');
+                    } catch(e) {
+                        console.log('Error clearing sessionStorage:', e);
+                    }
+                    
+                    // Clear cache storage (if available)
+                    try {
+                        if ('caches' in window) {
+                            caches.keys().then(function(names) {
+                                for (let name of names) {
+                                    caches.delete(name);
+                                }
+                                console.log('Cache storage cleared');
+                            });
+                        }
+                    } catch(e) {
+                        console.log('Error clearing cache storage:', e);
+                    }
+                    
+                    // Clear IndexedDB (if available)
+                    try {
+                        if ('indexedDB' in window) {
+                            indexedDB.databases().then(databases => {
+                                databases.forEach(db => {
+                                    indexedDB.deleteDatabase(db.name);
+                                });
+                                console.log('IndexedDB cleared');
+                            });
+                        }
+                    } catch(e) {
+                        console.log('Error clearing IndexedDB:', e);
+                    }
+                """)
+                logger.info("✅ Browser storage cleared (localStorage, sessionStorage, cache)")
+            except Exception as e:
+                logger.warning(f"Failed to clear browser storage via JavaScript: {str(e)}")
+            
+            logger.info("✅ Browser cache clearing completed")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error clearing browser cache: {str(e)}")
+            return False
+    
     def close_driver(self):
         """Close the WebDriver"""
         try:
@@ -649,6 +732,12 @@ def main():
                     total_successful += 1
                 else:
                     total_failed += 1
+                
+                # Clear browser cache after each application
+                print("\n" + ">"*50)
+                print("🧹 Clearing browser cache...")
+                print(">"*50)
+                automation.clear_browser_cache()
                 
                 # Print current session statistics
                 print("\n" + "="*70)
