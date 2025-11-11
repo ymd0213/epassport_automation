@@ -121,11 +121,11 @@ class Step4UpcomingTravel(BaseStep):
                     return False
                 time.sleep(0.5)  
                 
-                # Convert month number to 0-based index (January = 0, December = 11)
+                # Select departure month (using month number 1-12)
                 departure_month = self.travel_data.get('trip_abroad_month', '')
                 if departure_month:
-                    month_index = str(int(departure_month) - 1)
-                    if not self.find_and_select_option(self.departure_month, month_index, "departure month"):
+                    month_value = str(int(departure_month))
+                    if not self.find_and_select_option(self.departure_month, month_value, "departure month"):
                         logger.error("Failed to select departure month")
                         return False
                 time.sleep(0.5)  # 2 second delay after select
@@ -148,11 +148,11 @@ class Step4UpcomingTravel(BaseStep):
                     return False
                 time.sleep(0.5)  
                 
-                # Convert month number to 0-based index (January = 0, December = 11)
+                # Select return month (using month number 1-12)
                 return_month = self.travel_data.get('trip_return_month', '')
                 if return_month:
-                    month_index = str(int(return_month) - 1)
-                    if not self.find_and_select_option(self.return_month, month_index, "return month"):
+                    month_value = str(int(return_month))
+                    if not self.find_and_select_option(self.return_month, month_value, "return month"):
                         logger.error("Failed to select return month")
                         return False
                 time.sleep(0.5)  # 2 second delay after select

@@ -338,12 +338,12 @@ class Step15Payment(BaseStep):
                 }
             time.sleep(0.5)  
             
-            # Select expiration month - convert from real month number to 0-based index
+            # Select expiration month (using month number 1-12)
             cc_exp_month = payment_info.get('cc_exp_month', '')
             if cc_exp_month:
-                month_index = str(int(cc_exp_month) - 1)  # Convert to 0-based index
-                logger.info(f"Selecting expiration month: {cc_exp_month} (index: {month_index})")
-                if not self.find_and_select_option(self.expiration_month, month_index, "expiration month"):
+                month_value = str(int(cc_exp_month))
+                logger.info(f"Selecting expiration month: {cc_exp_month} (value: {month_value})")
+                if not self.find_and_select_option(self.expiration_month, month_value, "expiration month"):
                     logger.error("Failed to select expiration month")
                     return {
                         'status': False,
