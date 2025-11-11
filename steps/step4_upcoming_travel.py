@@ -121,10 +121,10 @@ class Step4UpcomingTravel(BaseStep):
                     return False
                 time.sleep(0.5)  
                 
-                # Select departure month (using month number 1-12)
+                # Select departure month (data is 1-12, but option values are 0-11)
                 departure_month = self.travel_data.get('trip_abroad_month', '')
                 if departure_month:
-                    month_value = str(int(departure_month))
+                    month_value = str(int(departure_month) - 1)  # Convert 1-12 to 0-11
                     if not self.find_and_select_option(self.departure_month, month_value, "departure month"):
                         logger.error("Failed to select departure month")
                         return False
@@ -148,10 +148,10 @@ class Step4UpcomingTravel(BaseStep):
                     return False
                 time.sleep(0.5)  
                 
-                # Select return month (using month number 1-12)
+                # Select return month (data is 1-12, but option values are 0-11)
                 return_month = self.travel_data.get('trip_return_month', '')
                 if return_month:
-                    month_value = str(int(return_month))
+                    month_value = str(int(return_month) - 1)  # Convert 1-12 to 0-11
                     if not self.find_and_select_option(self.return_month, month_value, "return month"):
                         logger.error("Failed to select return month")
                         return False

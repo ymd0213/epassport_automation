@@ -180,8 +180,8 @@ class Step6WhatAreYouRenewing(BaseStep):
                 
                 recent_book_issued_month = str(self.passport_data.get('recent_book_issued_month', ''))
                 if recent_book_issued_month:
-                    # Select passport book issue month (using month number 1-12)
-                    month_value = str(int(recent_book_issued_month))
+                    # Select passport book issue month (data is 1-12, but option values are 0-11)
+                    month_value = str(int(recent_book_issued_month) - 1)  # Convert 1-12 to 0-11
                     if not self.find_and_select_option(self.passport_book_issue_month, month_value, "passport book issue month"):
                         logger.error("Failed to select passport book issue month")
                         return False
@@ -228,8 +228,8 @@ class Step6WhatAreYouRenewing(BaseStep):
                 
                 recent_card_issued_month = str(self.passport_data.get('recent_book_issued_month', ''))
                 if recent_card_issued_month:
-                    # Select passport card issue month (using month number 1-12)
-                    month_value = str(int(recent_card_issued_month))
+                    # Select passport card issue month (data is 1-12, but option values are 0-11)
+                    month_value = str(int(recent_card_issued_month) - 1)  # Convert 1-12 to 0-11
                     if not self.find_and_select_option(self.passport_card_issue_month, month_value, "passport card issue month"):
                         logger.error("Failed to select passport card issue month")
                         return False
@@ -269,8 +269,8 @@ class Step6WhatAreYouRenewing(BaseStep):
             
             month_of_birth = str(self.passport_data.get('month_of_birth', ''))
             if month_of_birth:
-                # Select date of birth month (using month number 1-12)
-                month_value = str(int(month_of_birth))
+                # Select date of birth month (data is 1-12, but option values are 0-11)
+                month_value = str(int(month_of_birth) - 1)  # Convert 1-12 to 0-11
                 if not self.find_and_select_option(self.date_of_birth_month, month_value, "date of birth month"):
                     logger.error("Failed to select date of birth month")
                     return False
