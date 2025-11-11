@@ -120,7 +120,7 @@ class Step11MailingAddress(BaseStep):
                         'code': 'STEP11_BUTTON_FAILED',
                         'message': 'Failed to click Continue button'
                     }
-                time.sleep(5)
+                time.sleep(2)
                 
                 # Check for errors after Continue button click
                 error_result = self.check_for_page_errors("STEP11")
@@ -136,7 +136,7 @@ class Step11MailingAddress(BaseStep):
                         'code': 'STEP11_EDIT_BUTTON_FAILED',
                         'message': 'Failed to click Edit Mailing Address button'
                     }
-                time.sleep(5)
+                time.sleep(2)
                 
                 # Check for errors after Edit Mailing Address button click
                 error_result = self.check_for_page_errors("STEP11")
@@ -180,7 +180,7 @@ class Step11MailingAddress(BaseStep):
                         'code': 'STEP11_ADD_ADDRESS_FAILED',
                         'message': 'Failed to click Add Address button'
                     }
-                time.sleep(5)
+                time.sleep(2)
                 
                 # Check for errors after Add Address button click
                 error_result = self.check_for_page_errors("STEP11")
@@ -195,7 +195,7 @@ class Step11MailingAddress(BaseStep):
                         'code': 'STEP11_CONTINUE_FAILED',
                         'message': 'Failed to click Continue button after Add Address'
                     }
-                time.sleep(5)
+                time.sleep(2)
                 
                 # Check for errors
                 error_result = self.check_for_page_errors("STEP11")
@@ -210,7 +210,7 @@ class Step11MailingAddress(BaseStep):
                         'code': 'STEP11_FINAL_CONTINUE_FAILED',
                         'message': 'Failed to click final Continue button'
                     }
-                time.sleep(5)
+                time.sleep(2)
                 
                 # Check for errors
                 error_result = self.check_for_page_errors("STEP11")

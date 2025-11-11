@@ -285,7 +285,7 @@ class Step15Payment(BaseStep):
                     'code': 'FIRST_NAME_INPUT_FAILED',
                     'message': 'Failed to input first name'
                 }
-            time.sleep(0.5)  # 2 second delay after input
+            time.sleep(0.5)  
             
             # Fill in last name
             logger.info("Filling in account holder last name...")
@@ -296,7 +296,7 @@ class Step15Payment(BaseStep):
                     'code': 'LAST_NAME_INPUT_FAILED',
                     'message': 'Failed to input last name'
                 }
-            time.sleep(0.5)  # 2 second delay after input
+            time.sleep(0.5)  
             
             # Select card type using payment_option as index (not value)
             # Note: First option (index 0) is "Select" placeholder, so we add 1 to skip it
@@ -324,7 +324,7 @@ class Step15Payment(BaseStep):
                     'code': 'CARD_NUMBER_INPUT_FAILED',
                     'message': 'Failed to input card number'
                 }
-            time.sleep(0.5)  # 2 second delay after input
+            time.sleep(0.5)  
             
             # Fill in security code
             cc_cvv = str(payment_info.get('cc_cvv', ''))
@@ -336,7 +336,7 @@ class Step15Payment(BaseStep):
                     'code': 'SECURITY_CODE_INPUT_FAILED',
                     'message': 'Failed to input security code'
                 }
-            time.sleep(0.5)  # 2 second delay after input
+            time.sleep(0.5)  
             
             # Select expiration month - convert from real month number to 0-based index
             cc_exp_month = payment_info.get('cc_exp_month', '')
@@ -362,7 +362,7 @@ class Step15Payment(BaseStep):
                     'code': 'EXP_YEAR_INPUT_FAILED',
                     'message': 'Failed to input expiration year'
                 }
-            time.sleep(0.5)  # 2 second delay after input
+            time.sleep(0.5)  
             
             # Click Submit Order button
             logger.info("Clicking Submit Order button...")
@@ -374,9 +374,9 @@ class Step15Payment(BaseStep):
                     'message': 'Failed to click Submit Order button'
                 }
             
-            # Wait 5 seconds after clicking button
-            logger.info("Waiting 5 seconds after clicking Submit Order...")
-            time.sleep(5)
+            # Wait 2 seconds after clicking button
+            logger.info("waiting 2 seconds after clicking Submit Order...")
+            time.sleep(2)
             
             # Check for errors after clicking submit
             logger.info("Checking for errors after clicking Submit Order...")

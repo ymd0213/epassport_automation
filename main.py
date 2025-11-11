@@ -593,8 +593,8 @@ def main():
             return
         
         print("ChromeDriver setup successful!")
-        print("Waiting 5 seconds before navigation...")
-        time.sleep(5)
+        print("Waiting 1 seconds before navigation...")
+        time.sleep(1)
         
         # Initial navigation to the OPR website
         if not automation.navigate_to_url(target_url):
@@ -609,9 +609,9 @@ def main():
             print(f"Page Title: {page_info['title']}")
             print(f"Current URL: {page_info['url']}")
         
-        # Wait 30 seconds after initial navigation
-        print("\nWaiting 30 seconds after initial navigation...")
-        time.sleep(30)
+        # Wait 15 seconds after initial navigation
+        print("\nWaiting 15 seconds after initial navigation...")
+        time.sleep(15)
         
         print("\n" + "="*70)
         print("🔄 STARTING CONTINUOUS APPLICATION PROCESSING")
@@ -663,7 +663,6 @@ def main():
                 print("\n" + ">"*50)
                 print("🔄 Preparing for next application...")
                 print(">"*50)
-                time.sleep(5)
                 automation.navigate_to_url(target_url)
                 time.sleep(10)
                 

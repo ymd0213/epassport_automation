@@ -632,7 +632,7 @@ class Step8PersonalInformation(BaseStep):
             if not self.find_and_click_button(self.add_address_submit, "Add Address submit button"):
                 logger.error("Failed to click Add Address submit button")
                 return False
-            time.sleep(5)  # Wait 10 seconds after address submit
+            time.sleep(2)  # Wait 10 seconds after address submit
             
             # Check for errors after Add Address submit button click
             error_result = self.check_for_errors()
@@ -644,7 +644,7 @@ class Step8PersonalInformation(BaseStep):
             if not self.find_and_click_button(self.continue_button, "Continue button"):
                 logger.error("Failed to click Continue button after address submission")
                 return False
-            time.sleep(5)
+            time.sleep(2)
             
             # Check for errors after Continue button click
             error_result = self.check_for_errors()
@@ -764,9 +764,9 @@ class Step8PersonalInformation(BaseStep):
                     'message': 'Failed to click Continue button'
                 }
             
-            # Wait 5 seconds after clicking continue button
-            logger.info("Waiting 5 seconds after clicking Continue...")
-            time.sleep(5)
+            # Wait 2 seconds after clicking continue button
+            logger.info("waiting 2 seconds after clicking Continue...")
+            time.sleep(2)
             
             # Check for errors after final Continue button click
             logger.info("Checking for errors after clicking Continue...")

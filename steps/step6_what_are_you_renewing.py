@@ -339,8 +339,8 @@ class Step6WhatAreYouRenewing(BaseStep):
                         logger.info("Found Continue button, clicking it...")
                         continue_btn.click()
                         
-                        # Wait 5 seconds and check for errors after second click
-                        time.sleep(5)
+                        # Wait 2 seconds and check for errors after second click
+                        time.sleep(2)
                         error_result = self.check_for_page_errors("STEP6")
                         if error_result:
                             return error_result

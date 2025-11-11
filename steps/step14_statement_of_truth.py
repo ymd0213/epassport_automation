@@ -126,8 +126,8 @@ class Step14StatementOfTruth(BaseStep):
                     'message': 'Failed to click Continue button'
                 }
             
-            # Wait 5 seconds after clicking button
-            time.sleep(5)
+            # Wait 2 seconds after clicking button
+            time.sleep(2)
             
             # Check for errors after clicking continue
             logger.info("Checking for errors after clicking Continue...")

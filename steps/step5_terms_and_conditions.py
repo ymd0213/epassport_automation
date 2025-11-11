@@ -67,9 +67,9 @@ class Step5TermsAndConditions(BaseStep):
                     'message': 'Failed to click Continue button'
                 }
             
-            # Wait 5 seconds after clicking button
-            logger.info("Waiting 5 seconds after clicking Continue...")
-            time.sleep(5)
+            # Wait 2 seconds after clicking button
+            logger.info("waiting 2 seconds after clicking Continue...")
+            time.sleep(2)
             
             # Check for errors after clicking continue
             logger.info("Checking for errors after clicking Continue...")

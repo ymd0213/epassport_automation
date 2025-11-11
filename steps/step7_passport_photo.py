@@ -168,8 +168,8 @@ class Step7PassportPhoto(BaseStep):
                     'message': 'Failed to click initial Continue button'
                 }
             
-            # Wait 5 seconds and check for errors
-            time.sleep(5)
+            # Wait 2 seconds and check for errors
+            time.sleep(2)
             error_result = self.check_for_page_errors("STEP7")
             if error_result:
                 return error_result
@@ -235,8 +235,8 @@ class Step7PassportPhoto(BaseStep):
                     'message': 'Failed to click Continue button after upload'
                 }
             
-            # Wait 5 seconds and check for errors
-            time.sleep(5)
+            # Wait 2 seconds and check for errors
+            time.sleep(2)
             error_result = self.check_for_page_errors("STEP7")
             if error_result:
                 return error_result
@@ -252,8 +252,8 @@ class Step7PassportPhoto(BaseStep):
                         logger.info("Found final Continue button, clicking it...")
                         continue_btn.click()
                         
-                        # Wait 5 seconds and check for errors
-                        time.sleep(5)
+                        # Wait 2 seconds and check for errors
+                        time.sleep(2)
                         error_result = self.check_for_page_errors("STEP7")
                         if error_result:
                             return error_result

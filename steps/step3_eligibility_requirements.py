@@ -45,9 +45,9 @@ class Step3EligibilityRequirements(BaseStep):
             if success:
                 logger.info("✅ Step 3 completed successfully - Continue button clicked")
                 
-                # Wait 5 seconds as requested
-                logger.info("Waiting 5 seconds...")
-                time.sleep(5)
+                # Wait 2 seconds as requested
+                logger.info("waiting 2 seconds...")
+                time.sleep(2)
                 
                 return {
                     'status': True,

@@ -193,12 +193,12 @@ Standard fields like `first_name`, `last_name`, `email`, address fields, etc.
   - `cc_exp_month`: Expiration month as number (e.g., "8" for August)
   - `cc_exp_year`: Expiration year last 2 digits (e.g., "30" for 2030)
   - `cc_cvv`: Security code (e.g., "123")
-  - `payment_option`: Card type index as string (e.g., "3" for American Express)
-    - "0" = Select card type (default/placeholder)
-    - "1" = Visa
-    - "2" = Mastercard
+  - `payment_option`: Card type value as string (e.g., "3" for American Express)
+    - "0" = Visa
+    - "1" = Mastercard  
+    - "2" = Discover
     - "3" = American Express
-    - "4" = Discover
+    - Note: The script automatically adds +1 to skip the "Select" placeholder option in the dropdown
 
 **Example billing_info object**:
 ```json
@@ -211,6 +211,12 @@ Standard fields like `first_name`, `last_name`, `email`, address fields, etc.
   "payment_option": "3"
 }
 ```
+
+**Payment Option Mapping:**
+- `"0"` → Visa (dropdown index 1)
+- `"1"` → Mastercard (dropdown index 2)
+- `"2"` → Discover (dropdown index 3)
+- `"3"` → American Express (dropdown index 4)
 
 ### Step Result Format
 
