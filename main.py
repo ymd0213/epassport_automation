@@ -223,429 +223,158 @@ class UndetectedWebAutomation:
             # Wait a moment for page to fully load
             time.sleep(2)
             
-            captcha_iframe = None
+            # Look for main-wrapper element that contains the Cloudflare captcha
+            main_wrapper = None
+            max_attempts = 6  # Check every 2 seconds for up to 12 seconds
+            check_interval = 2
             
-            # First, check for hidden input field that indicates Cloudflare Turnstile is present
-            # This is more reliable than finding the iframe directly (especially if it's in shadow DOM)
-            try:
-                hidden_inputs = self.driver.find_elements(By.CSS_SELECTOR, "input[name='cf-turnstile-response']")
-                if hidden_inputs:
-                    logger.info(f"Found {len(hidden_inputs)} Cloudflare Turnstile hidden input(s) - captcha is present")
-                    # Get the iframe ID from the hidden input ID (format: cf-chl-widget-XXX_response)
-                    for hidden_input in hidden_inputs:
-                        input_id = hidden_input.get_attribute('id') or ''
-                        if '_response' in input_id:
-                            iframe_id = input_id.replace('_response', '')
-                            logger.info(f"Looking for iframe with id: {iframe_id}")
-                            try:
-                                # Try to find iframe by ID
-                                iframe = self.driver.find_element(By.ID, iframe_id)
-                                if iframe and iframe.is_displayed():
-                                    captcha_iframe = iframe
-                                    logger.info(f"✅ Found captcha iframe via hidden input: {iframe_id}")
-                                    break
-                            except:
-                                pass
-            except Exception as e:
-                logger.debug(f"Error checking for hidden input: {str(e)}")
-            
-            # Also check for the main-wrapper div that contains the captcha
-            try:
-                main_wrappers = self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper[role='main']")
-                if main_wrappers:
-                    logger.info(f"Found {len(main_wrappers)} main-wrapper div(s) - checking for captcha iframe inside...")
-            except:
-                pass
-            
-            # Debug: List all iframes on the page and check for Cloudflare captcha
-            try:
-                all_iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
-                logger.info(f"Found {len(all_iframes)} iframe(s) on the page")
-                for idx, iframe in enumerate(all_iframes):
-                    try:
-                        iframe_id = iframe.get_attribute('id') or 'no-id'
-                        iframe_src = iframe.get_attribute('src') or 'no-src'
-                        iframe_title = iframe.get_attribute('title') or 'no-title'
-                        is_displayed = iframe.is_displayed()
-                        logger.info(f"  Iframe {idx+1}: id='{iframe_id}', src='{iframe_src[:80]}...', title='{iframe_title}', displayed={is_displayed}")
-                        
-                        # Check if this iframe matches Cloudflare captcha by attributes
-                        if (iframe_id.startswith('cf-chl-widget-') or 
-                            'Widget containing a Cloudflare security challenge' in iframe_title or
-                            'challenges.cloudflare.com' in iframe_src):
-                            logger.info(f"  ⚠️  This iframe matches Cloudflare captcha pattern!")
-                            if is_displayed and not captcha_iframe:
-                                captcha_iframe = iframe
-                                logger.info(f"  ✅ Using this iframe as captcha target")
-                    except Exception as e:
-                        logger.debug(f"Error checking iframe {idx+1}: {str(e)}")
-                        pass
-            except Exception as e:
-                logger.debug(f"Error listing iframes: {str(e)}")
-            
-            # Look for Cloudflare captcha iframe (Turnstile)
-            # Based on actual iframe structure: id="cf-chl-widget-*", title="Widget containing a Cloudflare security challenge"
-            captcha_selectors = [
-                "iframe[id^='cf-chl-widget-']",  # Most specific: id starts with cf-chl-widget-
-                "iframe[title*='Widget containing a Cloudflare security challenge']",
-                "iframe[title*='Cloudflare security challenge']",
-                "iframe[src*='challenges.cloudflare.com/cdn-cgi/challenge-platform']",
-                "iframe[src*='challenges.cloudflare.com']",
-                "iframe[src*='cloudflare.com/cdn-cgi/challenge-platform']",
-                "iframe[id*='cf-chl']",
-                "iframe[title*='challenge']"
-            ]
-            
-            # Wait for captcha iframe to appear (it may load with delay)
-            # Poll for captcha iframe with multiple attempts (only if not already found)
-            if not captcha_iframe:
-                max_attempts = 6  # Check every 2 seconds for up to 12 seconds
-                check_interval = 2
+            for attempt in range(max_attempts):
+                if attempt > 0:
+                    logger.debug(f"Attempt {attempt + 1}/{max_attempts} to find main-wrapper...")
+                    time.sleep(check_interval)
                 
-                for attempt in range(max_attempts):
-                    if attempt > 0:
-                        logger.debug(f"Attempt {attempt + 1}/{max_attempts} to find captcha iframe...")
-                        time.sleep(check_interval)
-                    
-                    for selector in captcha_selectors:
-                        try:
-                            iframes = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                            if iframes:
-                                # Check if iframe is visible
-                                for iframe in iframes:
-                                    try:
-                                        if iframe.is_displayed():
-                                            captcha_iframe = iframe
-                                            logger.info(f"✅ Found Cloudflare captcha iframe with selector: {selector} (attempt {attempt + 1})")
-                                            break
-                                    except Exception as e:
-                                        logger.debug(f"Error checking iframe visibility: {str(e)}")
-                                        continue
-                                if captcha_iframe:
-                                    break
-                        except Exception as e:
-                            logger.debug(f"Selector {selector} error: {str(e)}")
-                            continue
-                    
-                    if captcha_iframe:
-                        break
-            
-            # If iframe not found directly, try accessing through shadow DOM using JavaScript
-            if not captcha_iframe:
-                logger.info("Iframe not found directly, trying to access through shadow DOM...")
                 try:
-                    # Use JavaScript to find iframe in shadow DOM
-                    script = """
-                    function findCaptchaIframe() {
-                        // Look for template elements with shadowrootmode
-                        const templates = document.querySelectorAll('template[shadowrootmode]');
-                        for (let template of templates) {
-                            try {
-                                const shadowRoot = template.shadowRoot || template.content;
-                                if (shadowRoot) {
-                                    const iframe = shadowRoot.querySelector('iframe[id^="cf-chl-widget-"]');
-                                    if (iframe) {
-                                        return iframe;
-                                    }
-                                }
-                            } catch(e) {
-                                // Shadow DOM might be closed, try other methods
-                            }
-                        }
-                        
-                        // Also try finding by hidden input and then looking for related iframe
-                        const hiddenInputs = document.querySelectorAll('input[name="cf-turnstile-response"]');
-                        for (let input of hiddenInputs) {
-                            const inputId = input.id || '';
-                            if (inputId.includes('cf-chl-widget-')) {
-                                const iframeId = inputId.replace('_response', '');
-                                const iframe = document.getElementById(iframeId);
-                                if (iframe) return iframe;
-                                
-                                // Try to find in shadow DOM
-                                const templates = document.querySelectorAll('template[shadowrootmode]');
-                                for (let template of templates) {
-                                    try {
-                                        const shadowRoot = template.shadowRoot || template.content;
-                                        if (shadowRoot) {
-                                            const iframe = shadowRoot.querySelector(`iframe#${iframeId}`);
-                                            if (iframe) return iframe;
-                                        }
-                                    } catch(e) {}
-                                }
-                            }
-                        }
-                        
-                        return null;
-                    }
-                    return findCaptchaIframe();
-                    """
+                    # Try to find main-wrapper element
+                    main_wrappers = self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper[role='main']")
+                    if not main_wrappers:
+                        # Also try without role='main' attribute
+                        main_wrappers = self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper")
                     
-                    iframe_element = self.driver.execute_script(script)
-                    if iframe_element:
-                        logger.info("✅ Found captcha iframe through shadow DOM access")
-                        # Note: We can't directly use the element from JavaScript, but we know it exists
-                        # Try to find it again using the ID we discovered
-                        try:
-                            # Extract iframe ID from the script result or try common patterns
-                            hidden_inputs = self.driver.find_elements(By.CSS_SELECTOR, "input[name='cf-turnstile-response']")
-                            for hidden_input in hidden_inputs:
-                                input_id = hidden_input.get_attribute('id') or ''
-                                if '_response' in input_id:
-                                    iframe_id = input_id.replace('_response', '')
-                                    # Try finding iframe using various methods
-                                    try:
-                                        iframe = self.driver.find_element(By.CSS_SELECTOR, f"iframe#{iframe_id}")
-                                        if iframe:
-                                            captcha_iframe = iframe
-                                            logger.info(f"✅ Found iframe using ID from shadow DOM: {iframe_id}")
-                                            break
-                                    except:
-                                        # Try with XPath
-                                        try:
-                                            iframe = self.driver.find_element(By.XPATH, f"//iframe[@id='{iframe_id}']")
-                                            if iframe:
-                                                captcha_iframe = iframe
-                                                logger.info(f"✅ Found iframe using XPath from shadow DOM: {iframe_id}")
-                                                break
-                                        except:
-                                            pass
-                        except Exception as e:
-                            logger.debug(f"Error finding iframe after shadow DOM detection: {str(e)}")
+                    if main_wrappers:
+                        for wrapper in main_wrappers:
+                            try:
+                                if wrapper.is_displayed():
+                                    main_wrapper = wrapper
+                                    logger.info(f"✅ Found main-wrapper element (attempt {attempt + 1})")
+                                    break
+                            except Exception as e:
+                                logger.debug(f"Error checking wrapper visibility: {str(e)}")
+                                continue
+                        
+                        if main_wrapper:
+                            break
                 except Exception as e:
-                    logger.debug(f"Error accessing shadow DOM: {str(e)}")
+                    logger.debug(f"Error finding main-wrapper: {str(e)}")
+                    continue
             
-            if not captcha_iframe:
-                # Last attempt: check if hidden input exists (captcha might be present even if iframe not accessible)
+            if not main_wrapper:
+                # Also check for hidden input as indicator that captcha exists
                 try:
                     hidden_inputs = self.driver.find_elements(By.CSS_SELECTOR, "input[name='cf-turnstile-response']")
                     if hidden_inputs:
-                        logger.info("⚠️  Cloudflare captcha hidden input found but iframe not directly accessible")
-                        logger.info("Captcha may be in shadow DOM - attempting to click checkbox via JavaScript...")
+                        logger.info("⚠️  Cloudflare captcha hidden input found but main-wrapper not found")
+                        logger.info("Attempting to find main-wrapper via JavaScript...")
                         
-                        # Use JavaScript to find and click the checkbox inside shadow DOM
-                        click_script = """
-                        function clickCaptchaCheckbox() {
-                            // Find template with shadow DOM
-                            const templates = document.querySelectorAll('template[shadowrootmode]');
-                            for (let template of templates) {
-                                try {
-                                    const shadowRoot = template.shadowRoot || template.content;
-                                    if (shadowRoot) {
-                                        // Find iframe
-                                        const iframe = shadowRoot.querySelector('iframe[id^="cf-chl-widget-"]');
-                                        if (iframe) {
-                                            // Try to access iframe content (cross-origin might prevent this)
-                                            try {
-                                                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                                                const checkbox = iframeDoc.querySelector('input[type="checkbox"]') || 
-                                                                 iframeDoc.querySelector('label.cb-lb') ||
-                                                                 iframeDoc.querySelector('.cb-lb');
-                                                if (checkbox) {
-                                                    checkbox.click();
-                                                    return true;
-                                                }
-                                            } catch(e) {
-                                                // Cross-origin restriction - click iframe itself
-                                                iframe.click();
-                                                return true;
-                                            }
-                                        }
-                                    }
-                                } catch(e) {
-                                    // Shadow DOM closed or other error
-                                }
-                            }
-                            
-                            // Fallback: click main-wrapper area
-                            const mainWrapper = document.querySelector('div.main-wrapper[role="main"]');
-                            if (mainWrapper) {
-                                mainWrapper.scrollIntoView({block: 'center'});
-                                // Try to find and click any clickable element in the captcha area
-                                const clickable = mainWrapper.querySelector('label, input, div[role="alert"]');
-                                if (clickable) {
-                                    clickable.click();
-                                    return true;
-                                }
-                                // Last resort: click the wrapper itself
-                                mainWrapper.click();
-                                return true;
-                            }
-                            
-                            return false;
-                        }
-                        return clickCaptchaCheckbox();
+                        # Try JavaScript to find main-wrapper
+                        script = """
+                        const mainWrapper = document.querySelector('div.main-wrapper[role="main"]') || 
+                                          document.querySelector('div.main-wrapper');
+                        return mainWrapper ? true : false;
                         """
-                        
-                        try:
-                            result = self.driver.execute_script(click_script)
-                            if result:
-                                logger.info("✅ Clicked Cloudflare captcha checkbox via JavaScript (shadow DOM)")
-                                time.sleep(5)
-                                return True
-                            else:
-                                logger.warning("JavaScript click attempt returned false")
-                        except Exception as js_error:
-                            logger.debug(f"JavaScript click failed: {str(js_error)}")
-                            
-                            # Fallback: try clicking main-wrapper using coordinates
-                            try:
-                                main_wrapper = self.driver.find_element(By.CSS_SELECTOR, "div.main-wrapper[role='main']")
-                                if main_wrapper:
-                                    logger.info("Attempting coordinate-based click on main-wrapper...")
-                                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", main_wrapper)
-                                    time.sleep(1)
-                                    from selenium.webdriver.common.action_chains import ActionChains
-                                    actions = ActionChains(self.driver)
-                                    actions.move_to_element(main_wrapper).click().perform()
-                                    logger.info("✅ Clicked main-wrapper area")
-                                    time.sleep(5)
-                                    return True
-                            except:
-                                pass
+                        result = self.driver.execute_script(script)
+                        if result:
+                            logger.info("main-wrapper exists but may not be directly accessible")
                 except:
                     pass
                 
-                logger.info("No Cloudflare captcha iframe found - proceeding normally")
+                logger.info("No Cloudflare captcha main-wrapper found - proceeding normally")
                 return False
             
-            logger.info(f"Cloudflare captcha iframe found: id={captcha_iframe.get_attribute('id')}, title={captcha_iframe.get_attribute('title')}")
-            
-            # Switch to captcha iframe and find the checkbox element
+            # Click the main-wrapper element
             try:
-                logger.info("Switching to Cloudflare captcha iframe...")
-                # Scroll into view first
-                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", captcha_iframe)
+                logger.info("Clicking Cloudflare captcha main-wrapper element...")
+                
+                # Scroll into view
+                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", main_wrapper)
                 time.sleep(1)
                 
-                # Switch into the iframe
-                self.driver.switch_to.frame(captcha_iframe)
+                # Try multiple click methods
+                clicked = False
                 
-                # Wait a moment for iframe content to load
-                time.sleep(1)
-                
-                # Find the checkbox element based on the actual HTML structure
-                # The checkbox is: <input type="checkbox"> inside <label class="cb-lb">
-                checkbox_selectors = [
-                    "label.cb-lb input[type='checkbox']",  # Most specific: checkbox inside label
-                    "input[type='checkbox']",  # Direct checkbox
-                    "label.cb-lb",  # The label containing the checkbox
-                    ".cb-lb",  # Label class
-                    "label[class*='cb-lb']",  # Label with cb-lb in class
-                ]
-                
-                checkbox = None
-                checkbox_element = None
-                
-                # Try multiple times to find the checkbox (it may load with delay)
-                for attempt in range(5):
-                    if attempt > 0:
-                        time.sleep(1)
-                        logger.debug(f"Retry attempt {attempt + 1} to find checkbox...")
-                    
-                    for selector in checkbox_selectors:
-                        try:
-                            logger.debug(f"Trying selector: {selector}")
-                            elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                            
-                            if elements:
-                                for elem in elements:
-                                    try:
-                                        if elem.is_displayed():
-                                            # Prefer the actual checkbox input over the label
-                                            if "input" in selector:
-                                                checkbox_element = elem
-                                                logger.info(f"✅ Found checkbox input with selector: {selector}")
-                                            elif not checkbox_element:
-                                                checkbox = elem
-                                                logger.info(f"Found checkbox label/container with selector: {selector}")
-                                            break
-                                    except Exception as e:
-                                        logger.debug(f"Error checking element visibility: {str(e)}")
-                                        continue
-                                if checkbox_element or checkbox:
-                                    break
-                        except Exception as e:
-                            logger.debug(f"Selector {selector} error: {str(e)}")
-                            continue
-                    
-                    if checkbox_element or checkbox:
-                        break
-                
-                # Use checkbox_element (input) if found, otherwise use checkbox (label)
-                target_element = checkbox_element if checkbox_element else checkbox
-                
-                if target_element:
-                    logger.info(f"Clicking Cloudflare captcha checkbox element...")
-                    try:
-                        # Scroll element into view
-                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target_element)
-                        time.sleep(0.5)
-                        
-                        # Try regular click first
-                        target_element.click()
-                        logger.info("✅ Clicked checkbox using regular click")
-                    except Exception as click_error:
-                        logger.debug(f"Regular click failed: {str(click_error)}, trying JavaScript click...")
-                        try:
-                            # Fallback to JavaScript click
-                            self.driver.execute_script("arguments[0].click();", target_element)
-                            logger.info("✅ Clicked checkbox using JavaScript")
-                        except Exception as js_error:
-                            logger.warning(f"JavaScript click also failed: {str(js_error)}")
-                            # Try clicking parent label if checkbox failed
-                            if checkbox_element and checkbox:
-                                try:
-                                    logger.info("Trying to click parent label...")
-                                    checkbox.click()
-                                    logger.info("✅ Clicked parent label")
-                                except:
-                                    pass
-                else:
-                    logger.warning("Could not find checkbox element inside captcha iframe")
-                
-                # Switch back to default content
-                self.driver.switch_to.default_content()
-                
-            except Exception as iframe_error:
-                logger.warning(f"Error interacting with captcha checkbox: {str(iframe_error)}")
+                # Method 1: Regular click
                 try:
-                    self.driver.switch_to.default_content()
-                except:
-                    pass
-            
-            # Wait for captcha to complete
-            logger.info("Waiting for Cloudflare captcha to complete...")
-            time.sleep(5)
-            
-            # Check if captcha iframe still exists and is visible
-            try:
-                remaining_iframes = self.driver.find_elements(By.CSS_SELECTOR, captcha_selectors[0])
-                still_visible = False
-                for iframe in remaining_iframes:
-                    if iframe.is_displayed():
-                        still_visible = True
-                        break
+                    main_wrapper.click()
+                    logger.info("✅ Clicked main-wrapper using regular click")
+                    clicked = True
+                except Exception as click_error:
+                    logger.debug(f"Regular click failed: {str(click_error)}")
+                    
+                    # Method 2: JavaScript click
+                    try:
+                        self.driver.execute_script("arguments[0].click();", main_wrapper)
+                        logger.info("✅ Clicked main-wrapper using JavaScript")
+                        clicked = True
+                    except Exception as js_error:
+                        logger.debug(f"JavaScript click failed: {str(js_error)}")
+                        
+                        # Method 3: ActionChains click
+                        try:
+                            from selenium.webdriver.common.action_chains import ActionChains
+                            actions = ActionChains(self.driver)
+                            actions.move_to_element(main_wrapper).click().perform()
+                            logger.info("✅ Clicked main-wrapper using ActionChains")
+                            clicked = True
+                        except Exception as ac_error:
+                            logger.debug(f"ActionChains click failed: {str(ac_error)}")
+                            
+                            # Method 4: Click using coordinates (relative to element center)
+                            try:
+                                from selenium.webdriver.common.action_chains import ActionChains
+                                actions = ActionChains(self.driver)
+                                actions.move_to_element_with_offset(main_wrapper, 0, 0).click().perform()
+                                logger.info("✅ Clicked main-wrapper using coordinates")
+                                clicked = True
+                            except Exception as coord_error:
+                                # Method 5: Try JavaScript click with MouseEvent
+                                try:
+                                    self.driver.execute_script("""
+                                        var element = arguments[0];
+                                        var rect = element.getBoundingClientRect();
+                                        var x = rect.left + rect.width / 2;
+                                        var y = rect.top + rect.height / 2;
+                                        var clickEvent = new MouseEvent('click', {
+                                            view: window,
+                                            bubbles: true,
+                                            cancelable: true,
+                                            clientX: x,
+                                            clientY: y
+                                        });
+                                        element.dispatchEvent(clickEvent);
+                                    """, main_wrapper)
+                                    logger.info("✅ Clicked main-wrapper using JavaScript MouseEvent")
+                                    clicked = True
+                                except Exception as js_coord_error:
+                                    logger.warning(f"All click methods failed: {str(js_coord_error)}")
                 
-                if not still_visible:
-                    logger.info("✅ Cloudflare captcha completed successfully (iframe no longer visible)")
-                    return True
-                else:
-                    logger.info("Captcha iframe still present, waiting longer...")
+                if clicked:
+                    # Wait for captcha to complete
+                    logger.info("Waiting for Cloudflare captcha to complete...")
                     time.sleep(5)
-                    # Check again
-                    remaining_iframes = self.driver.find_elements(By.CSS_SELECTOR, captcha_selectors[0])
-                    still_visible = False
-                    for iframe in remaining_iframes:
-                        if iframe.is_displayed():
-                            still_visible = True
-                            break
-                    if not still_visible:
-                        logger.info("✅ Cloudflare captcha completed successfully")
-                    return True
-            except:
-                logger.info("✅ Cloudflare captcha interaction completed")
-                return True
+                    
+                    # Check if captcha is still present
+                    try:
+                        # Check if hidden input still exists (it should remain but captcha should be solved)
+                        hidden_inputs = self.driver.find_elements(By.CSS_SELECTOR, "input[name='cf-turnstile-response']")
+                        if hidden_inputs:
+                            # Check if the response value is filled (indicates captcha solved)
+                            for hidden_input in hidden_inputs:
+                                response_value = hidden_input.get_attribute('value') or ''
+                                if response_value:
+                                    logger.info("✅ Cloudflare captcha completed successfully (response value present)")
+                                    return True
+                        
+                        logger.info("✅ Cloudflare captcha interaction completed")
+                        return True
+                    except:
+                        logger.info("✅ Cloudflare captcha interaction completed")
+                        return True
+                else:
+                    logger.warning("Failed to click main-wrapper element")
+                    return False
+                    
+            except Exception as e:
+                logger.warning(f"Error clicking main-wrapper: {str(e)}")
+                return False
                 
         except Exception as e:
             logger.warning(f"Error handling Cloudflare captcha: {str(e)}")
