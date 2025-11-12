@@ -223,6 +223,34 @@ class UndetectedWebAutomation:
             # Wait a moment for page to fully load
             time.sleep(2)
             
+            captcha_iframe = None
+            
+            # Debug: List all iframes on the page and check for Cloudflare captcha
+            try:
+                all_iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
+                logger.info(f"Found {len(all_iframes)} iframe(s) on the page")
+                for idx, iframe in enumerate(all_iframes):
+                    try:
+                        iframe_id = iframe.get_attribute('id') or 'no-id'
+                        iframe_src = iframe.get_attribute('src') or 'no-src'
+                        iframe_title = iframe.get_attribute('title') or 'no-title'
+                        is_displayed = iframe.is_displayed()
+                        logger.info(f"  Iframe {idx+1}: id='{iframe_id}', src='{iframe_src[:80]}...', title='{iframe_title}', displayed={is_displayed}")
+                        
+                        # Check if this iframe matches Cloudflare captcha by attributes
+                        if (iframe_id.startswith('cf-chl-widget-') or 
+                            'Widget containing a Cloudflare security challenge' in iframe_title or
+                            'challenges.cloudflare.com' in iframe_src):
+                            logger.info(f"  ⚠️  This iframe matches Cloudflare captcha pattern!")
+                            if is_displayed and not captcha_iframe:
+                                captcha_iframe = iframe
+                                logger.info(f"  ✅ Using this iframe as captcha target")
+                    except Exception as e:
+                        logger.debug(f"Error checking iframe {idx+1}: {str(e)}")
+                        pass
+            except Exception as e:
+                logger.debug(f"Error listing iframes: {str(e)}")
+            
             # Look for Cloudflare captcha iframe (Turnstile)
             # Based on actual iframe structure: id="cf-chl-widget-*", title="Widget containing a Cloudflare security challenge"
             captcha_selectors = [
@@ -236,22 +264,39 @@ class UndetectedWebAutomation:
                 "iframe[title*='challenge']"
             ]
             
-            captcha_iframe = None
-            for selector in captcha_selectors:
-                try:
-                    iframes = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                    if iframes:
-                        # Check if iframe is visible
-                        for iframe in iframes:
-                            if iframe.is_displayed():
-                                captcha_iframe = iframe
-                                logger.info(f"Found Cloudflare captcha iframe with selector: {selector}")
-                                break
-                        if captcha_iframe:
-                            break
-                except Exception as e:
-                    logger.debug(f"Selector {selector} not found: {str(e)}")
-                    continue
+            # Wait for captcha iframe to appear (it may load with delay)
+            # Poll for captcha iframe with multiple attempts (only if not already found)
+            if not captcha_iframe:
+                max_attempts = 6  # Check every 2 seconds for up to 12 seconds
+                check_interval = 2
+                
+                for attempt in range(max_attempts):
+                    if attempt > 0:
+                        logger.debug(f"Attempt {attempt + 1}/{max_attempts} to find captcha iframe...")
+                        time.sleep(check_interval)
+                    
+                    for selector in captcha_selectors:
+                        try:
+                            iframes = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                            if iframes:
+                                # Check if iframe is visible
+                                for iframe in iframes:
+                                    try:
+                                        if iframe.is_displayed():
+                                            captcha_iframe = iframe
+                                            logger.info(f"✅ Found Cloudflare captcha iframe with selector: {selector} (attempt {attempt + 1})")
+                                            break
+                                    except Exception as e:
+                                        logger.debug(f"Error checking iframe visibility: {str(e)}")
+                                        continue
+                                if captcha_iframe:
+                                    break
+                        except Exception as e:
+                            logger.debug(f"Selector {selector} error: {str(e)}")
+                            continue
+                    
+                    if captcha_iframe:
+                        break
             
             if not captcha_iframe:
                 logger.info("No Cloudflare captcha found - proceeding normally")
