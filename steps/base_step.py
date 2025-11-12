@@ -172,6 +172,32 @@ class BaseStep:
         except:
             return "Unknown"
     
+    def get_page_name(self):
+        """
+        Extract page name from step_name (removes "Step X: " prefix)
+        
+        Returns:
+            str: Page name (e.g., "Passport Photo Upload" from "Step 7: Passport Photo Upload")
+        """
+        if not self.step_name:
+            return "Unknown Page"
+        # Remove "Step X: " prefix if present
+        import re
+        page_name = re.sub(r'^Step \d+:\s*', '', self.step_name)
+        return page_name.strip()
+    
+    def get_page_name_code(self):
+        """
+        Get page name in code format (uppercase, spaces replaced with underscores)
+        
+        Returns:
+            str: Page name code (e.g., "PASSPORT_PHOTO_UPLOAD")
+        """
+        page_name = self.get_page_name()
+        # Convert to uppercase and replace spaces with underscores
+        code = page_name.upper().replace(' ', '_')
+        return code
+    
     def log_step_info(self):
         """Log current step information"""
         logger.info(f"=== {self.step_name} ===")
@@ -496,16 +522,20 @@ class BaseStep:
             logger.error(f"❌ Error selecting from {description}: {str(e)}")
             return False
 
-    def check_for_page_errors(self, step_name="STEP"):
+    def check_for_page_errors(self, step_name=None):
         """
         Check for error messages on the page after an action
         
         Args:
-            step_name (str): Name of the step for error code
+            step_name (str, optional): Name of the step for error code. If None, uses page name code.
             
         Returns:
             dict or None: Error dict if error found, None if no errors
         """
+        # Use page name code if step_name not provided
+        if step_name is None:
+            step_name = self.get_page_name_code()
+        
         try:
             # Wait a moment for any errors to appear
             time.sleep(1)

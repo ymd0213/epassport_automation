@@ -108,10 +108,11 @@ class Step14StatementOfTruth(BaseStep):
             logger.info("Clicking checkbox wrapper on statement of truth page...")
             if not self.find_and_click_checkbox_wrapper():
                 logger.error("Failed to click checkbox wrapper")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'CHECKBOX_WRAPPER_FAILED',
-                    'message': 'Failed to click checkbox wrapper'
+                    'code': f'{page_code}_CHECKBOX_WRAPPER_FAILED',
+                    'message': 'We couldn\'t accept the statement of truth. Please try again.'
                 }
             
             time.sleep(0.5)  # Brief pause after clicking checkbox
@@ -120,10 +121,11 @@ class Step14StatementOfTruth(BaseStep):
             logger.info("Clicking Continue button on statement of truth page...")
             if not self.find_and_click_button(self.continue_button, "Continue button"):
                 logger.error("Failed to click Continue button")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'CONTINUE_BUTTON_FAILED',
-                    'message': 'Failed to click Continue button'
+                    'code': f'{page_code}_CONTINUE_BUTTON_FAILED',
+                    'message': 'We couldn\'t proceed with your request. Please try again.'
                 }
             
             # Wait 2 seconds after clicking button
@@ -131,7 +133,7 @@ class Step14StatementOfTruth(BaseStep):
             
             # Check for errors after clicking continue
             logger.info("Checking for errors after clicking Continue...")
-            error_result = self.check_for_page_errors("STEP14")
+            error_result = self.check_for_page_errors()
             if error_result:
                 return error_result
             
@@ -144,9 +146,10 @@ class Step14StatementOfTruth(BaseStep):
             
         except Exception as e:
             logger.error(f"❌ Step 14 failed with error: {str(e)}")
+            page_code = self.get_page_name_code()
             return {
                 'status': False,
-                'code': 'STEP14_EXCEPTION',
-                'message': f'Step 14 failed with error: {str(e)}'
+                'code': f'{page_code}_EXCEPTION',
+                'message': 'We encountered an issue processing your request. Please try again.'
             }
 

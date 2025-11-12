@@ -41,10 +41,11 @@ class Step9EmergencyContact(BaseStep):
             logger.info("Clicking Continue button on emergency contact page...")
             if not self.find_and_click_button(self.continue_button, "Continue button"):
                 logger.error("Failed to click Continue button")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'CONTINUE_BUTTON_FAILED',
-                    'message': 'Failed to click Continue button'
+                    'code': f'{page_code}_CONTINUE_BUTTON_FAILED',
+                    'message': 'We couldn\'t proceed with your request. Please try again.'
                 }
             
             # Wait 2 seconds after clicking button
@@ -52,7 +53,7 @@ class Step9EmergencyContact(BaseStep):
             
             # Check for errors after clicking continue
             logger.info("Checking for errors after clicking Continue...")
-            error_result = self.check_for_page_errors("STEP9")
+            error_result = self.check_for_page_errors()
             if error_result:
                 return error_result
             
@@ -65,8 +66,9 @@ class Step9EmergencyContact(BaseStep):
             
         except Exception as e:
             logger.error(f"❌ Step 9 failed with error: {str(e)}")
+            page_code = self.get_page_name_code()
             return {
                 'status': False,
-                'code': 'STEP9_EXCEPTION',
-                'message': f'Step 9 failed with error: {str(e)}'
+                'code': f'{page_code}_EXCEPTION',
+                'message': 'We encountered an issue processing your request. Please try again.'
             }

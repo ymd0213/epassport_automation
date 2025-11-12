@@ -246,10 +246,11 @@ class Step15Payment(BaseStep):
             # Validate that we have the required billing information
             if not billing_info:
                 logger.error("No billing_info found in payment data")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'BILLING_INFO_MISSING',
-                    'message': 'No billing_info found in payment data'
+                    'code': f'{page_code}_BILLING_INFO_MISSING',
+                    'message': 'Payment information is missing. Please provide your billing details.'
                 }
             
             # Use billing_info from API
@@ -261,10 +262,11 @@ class Step15Payment(BaseStep):
             
             if missing_fields:
                 logger.error(f"Missing required billing fields: {', '.join(missing_fields)}")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'BILLING_INFO_INCOMPLETE',
-                    'message': f'Missing required billing fields: {", ".join(missing_fields)}'
+                    'code': f'{page_code}_BILLING_INFO_INCOMPLETE',
+                    'message': 'Please provide all required payment information.'
                 }
             
             # Split cardholder name into first and last name
@@ -280,10 +282,11 @@ class Step15Payment(BaseStep):
             logger.info("Filling in account holder first name...")
             if not self.find_and_input_text(self.first_name, first_name, "first name"):
                 logger.error("Failed to input first name")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'FIRST_NAME_INPUT_FAILED',
-                    'message': 'Failed to input first name'
+                    'code': f'{page_code}_FIRST_NAME_INPUT_FAILED',
+                    'message': 'We couldn\'t process your payment information. Please try again.'
                 }
             time.sleep(0.5)  
             
@@ -291,10 +294,11 @@ class Step15Payment(BaseStep):
             logger.info("Filling in account holder last name...")
             if not self.find_and_input_text(self.surname, last_name, "last name"):
                 logger.error("Failed to input last name")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'LAST_NAME_INPUT_FAILED',
-                    'message': 'Failed to input last name'
+                    'code': f'{page_code}_LAST_NAME_INPUT_FAILED',
+                    'message': 'We couldn\'t process your payment information. Please try again.'
                 }
             time.sleep(0.5)  
             
@@ -307,10 +311,11 @@ class Step15Payment(BaseStep):
             # Select by index (not by value) since payment_option represents position in dropdown
             if not self.select_card_type_by_index(payment_option_index):
                 logger.error("Failed to select card type")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'CARD_TYPE_SELECT_FAILED',
-                    'message': 'Failed to select card type'
+                    'code': f'{page_code}_CARD_TYPE_SELECT_FAILED',
+                    'message': 'We couldn\'t process your payment information. Please try again.'
                 }
             time.sleep(0.5)  # 2 second delay after select
             
@@ -319,10 +324,11 @@ class Step15Payment(BaseStep):
             logger.info("Filling in card number...")
             if not self.input_card_number(cc_number, "card number"):
                 logger.error("Failed to input card number")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'CARD_NUMBER_INPUT_FAILED',
-                    'message': 'Failed to input card number'
+                    'code': f'{page_code}_CARD_NUMBER_INPUT_FAILED',
+                    'message': 'We couldn\'t process your payment information. Please try again.'
                 }
             time.sleep(0.5)  
             
@@ -331,10 +337,11 @@ class Step15Payment(BaseStep):
             logger.info("Filling in security code...")
             if not self.find_and_input_text(self.security_code, cc_cvv, "security code"):
                 logger.error("Failed to input security code")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'SECURITY_CODE_INPUT_FAILED',
-                    'message': 'Failed to input security code'
+                    'code': f'{page_code}_SECURITY_CODE_INPUT_FAILED',
+                    'message': 'We couldn\'t process your payment information. Please try again.'
                 }
             time.sleep(0.5)  
             
@@ -345,10 +352,11 @@ class Step15Payment(BaseStep):
                 logger.info(f"Selecting expiration month: {cc_exp_month} (option value: {month_value})")
                 if not self.find_and_select_option(self.expiration_month, month_value, "expiration month"):
                     logger.error("Failed to select expiration month")
+                    page_code = self.get_page_name_code()
                     return {
                         'status': False,
-                        'code': 'EXP_MONTH_SELECT_FAILED',
-                        'message': 'Failed to select expiration month'
+                        'code': f'{page_code}_EXP_MONTH_SELECT_FAILED',
+                        'message': 'We couldn\'t process your payment information. Please try again.'
                     }
             time.sleep(0.5)  # 2 second delay after select
             
@@ -357,10 +365,11 @@ class Step15Payment(BaseStep):
             logger.info("Filling in expiration year...")
             if not self.find_and_input_text(self.expiration_year, cc_exp_year, "expiration year"):
                 logger.error("Failed to input expiration year")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'EXP_YEAR_INPUT_FAILED',
-                    'message': 'Failed to input expiration year'
+                    'code': f'{page_code}_EXP_YEAR_INPUT_FAILED',
+                    'message': 'We couldn\'t process your payment information. Please try again.'
                 }
             time.sleep(0.5)  
             
@@ -368,10 +377,11 @@ class Step15Payment(BaseStep):
             logger.info("Clicking Submit Order button...")
             if not self.find_and_click_button(self.submit_button, "Submit Order button"):
                 logger.error("Failed to click Submit Order button")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'SUBMIT_BUTTON_CLICK_FAILED',
-                    'message': 'Failed to click Submit Order button'
+                    'code': f'{page_code}_SUBMIT_BUTTON_CLICK_FAILED',
+                    'message': 'We couldn\'t submit your payment. Please try again.'
                 }
             
             # Wait 2 seconds after clicking button
@@ -380,7 +390,7 @@ class Step15Payment(BaseStep):
             
             # Check for errors after clicking submit
             logger.info("Checking for errors after clicking Submit Order...")
-            error_result = self.check_for_page_errors("STEP15")
+            error_result = self.check_for_page_errors()
             if error_result:
                 return error_result
             
@@ -393,9 +403,10 @@ class Step15Payment(BaseStep):
             
         except Exception as e:
             logger.error(f"❌ Step 15 failed with error: {str(e)}")
+            page_code = self.get_page_name_code()
             return {
                 'status': False,
-                'code': 'STEP15_EXCEPTION',
-                'message': f'Step 15 failed with error: {str(e)}'
+                'code': f'{page_code}_EXCEPTION',
+                'message': 'We encountered an issue processing your payment. Please try again.'
             }
 

@@ -151,19 +151,21 @@ class Step4UpcomingTravel(BaseStep):
                     if travel_plans_error:
                         error_message = travel_plans_error.text.strip()
                         logger.error(f"Travel plans error detected: {error_message}")
+                        page_code = self.get_page_name_code()
                         return {
                             'status': False,
-                            'code': 'TRAVEL_PLANS_ERROR',
+                            'code': f'{page_code}_TRAVEL_PLANS_ERROR',
                             'message': error_message
                         }
                 except:
                     pass  # No travel plans error found
                 
                 logger.error("Continue button not found and travel plans error detected")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'CONTINUE_BUTTON_NOT_FOUND',
-                    'message': 'Continue button not found and travel plans error detected'
+                    'code': f'{page_code}_CONTINUE_BUTTON_NOT_FOUND',
+                    'message': 'We couldn\'t proceed with your travel information. Please check your details and try again.'
                 }
             
             # Check if continue button is disabled
@@ -175,29 +177,32 @@ class Step4UpcomingTravel(BaseStep):
                     if date_error:
                         error_message = date_error.text.strip()
                         logger.error(f"Date error detected: {error_message}")
+                        page_code = self.get_page_name_code()
                         return {
                             'status': False,
-                            'code': 'TRAVEL_PLANS_ERROR',
+                            'code': f'{page_code}_TRAVEL_PLANS_ERROR',
                             'message': error_message
                         }
                 except:
                     pass  # No date error found
                 
                 logger.error("Continue button is disabled but no date error detected")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'CONTINUE_BUTTON_DISABLED',
-                    'message': 'Continue button is disabled but no date error detected'
+                    'code': f'{page_code}_CONTINUE_BUTTON_DISABLED',
+                    'message': 'Please check your travel information and try again.'
                 }
             
             # Click Continue button
             logger.info("Clicking Continue button...")
             if not self.find_and_click_button(self.continue_button, "Continue button"):
                 logger.error("Failed to click Continue button")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'CONTINUE_BUTTON_CLICK_FAILED',
-                    'message': 'Failed to click Continue button'
+                    'code': f'{page_code}_CONTINUE_BUTTON_CLICK_FAILED',
+                    'message': 'We couldn\'t proceed with your request. Please try again.'
                 }
             
             # Wait 2 seconds after clicking button
@@ -206,7 +211,7 @@ class Step4UpcomingTravel(BaseStep):
             
             # Check for errors after clicking continue
             logger.info("Checking for errors after clicking Continue...")
-            error_result = self.check_for_page_errors("STEP4")
+            error_result = self.check_for_page_errors()
             if error_result:
                 return error_result
             
@@ -219,8 +224,9 @@ class Step4UpcomingTravel(BaseStep):
             
         except Exception as e:
             logger.error(f"❌ Step 4 failed with error: {str(e)}")
+            page_code = self.get_page_name_code()
             return {
                 'status': False,
-                'code': 'STEP4_EXCEPTION',
-                'message': f'Step 4 failed with error: {str(e)}'
+                'code': f'{page_code}_EXCEPTION',
+                'message': 'We encountered an issue processing your travel information. Please try again.'
             }

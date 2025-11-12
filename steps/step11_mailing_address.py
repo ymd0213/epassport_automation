@@ -83,9 +83,10 @@ class Step11MailingAddress(BaseStep):
                         if error_messages:
                             error_message = ", ".join(error_messages)
                             logger.error(f"❌ Error found: {error_message}")
+                            page_code = self.get_page_name_code()
                             return {
                                 'status': False,
-                                'code': 'MAILING_ADDRESS_ERROR',
+                                'code': f'{page_code}_MAILING_ADDRESS_ERROR',
                                 'message': error_message
                             }
                 except:
@@ -93,9 +94,10 @@ class Step11MailingAddress(BaseStep):
                     error_text = error_alert.text.strip()
                     if error_text:
                         logger.error(f"❌ General error found: {error_text}")
+                        page_code = self.get_page_name_code()
                         return {
                             'status': False,
-                            'code': 'MAILING_ADDRESS_ERROR',
+                            'code': f'{page_code}_MAILING_ADDRESS_ERROR',
                             'message': error_text
                         }
         except:
@@ -115,15 +117,16 @@ class Step11MailingAddress(BaseStep):
                 logger.info("permanent_address_same is 1 -> clicking Continue and waiting 5s")
                 if not self.find_and_click_button(self.continue_button, "Continue button"):
                     logger.error("Failed to click Continue button")
+                    page_code = self.get_page_name_code()
                     return {
                         'status': False,
-                        'code': 'STEP11_BUTTON_FAILED',
-                        'message': 'Failed to click Continue button'
+                        'code': f'{page_code}_BUTTON_FAILED',
+                        'message': 'We couldn\'t proceed with your request. Please try again.'
                     }
                 time.sleep(2)
                 
                 # Check for errors after Continue button click
-                error_result = self.check_for_page_errors("STEP11")
+                error_result = self.check_for_page_errors()
                 if error_result:
                     return error_result
             else:
@@ -131,15 +134,16 @@ class Step11MailingAddress(BaseStep):
                 # Click Edit Mailing Address
                 if not self.find_and_click_button(self.edit_mailing_button, "Edit Mailing Address button"):
                     logger.error("Failed to click Edit Mailing Address button")
+                    page_code = self.get_page_name_code()
                     return {
                         'status': False,
-                        'code': 'STEP11_EDIT_BUTTON_FAILED',
-                        'message': 'Failed to click Edit Mailing Address button'
+                        'code': f'{page_code}_EDIT_BUTTON_FAILED',
+                        'message': 'We couldn\'t edit your mailing address. Please try again.'
                     }
                 time.sleep(2)
                 
                 # Check for errors after Edit Mailing Address button click
-                error_result = self.check_for_page_errors("STEP11")
+                error_result = self.check_for_page_errors()
                 if error_result:
                     return error_result
                 
@@ -175,45 +179,48 @@ class Step11MailingAddress(BaseStep):
                 # Click Add Address
                 if not self.find_and_click_button(self.add_address_button, "Add Address button"):
                     logger.error("Failed to click Add Address button")
+                    page_code = self.get_page_name_code()
                     return {
                         'status': False,
-                        'code': 'STEP11_ADD_ADDRESS_FAILED',
-                        'message': 'Failed to click Add Address button'
+                        'code': f'{page_code}_ADD_ADDRESS_FAILED',
+                        'message': 'We couldn\'t add your mailing address. Please try again.'
                     }
                 time.sleep(2)
                 
                 # Check for errors after Add Address button click
-                error_result = self.check_for_page_errors("STEP11")
+                error_result = self.check_for_page_errors()
                 if error_result:
                     return error_result
                 
                 # Click Continue
                 if not self.find_and_click_button(self.continue_button, "Continue button"):
                     logger.error("Failed to click Continue button after Add Address")
+                    page_code = self.get_page_name_code()
                     return {
                         'status': False,
-                        'code': 'STEP11_CONTINUE_FAILED',
-                        'message': 'Failed to click Continue button after Add Address'
+                        'code': f'{page_code}_CONTINUE_FAILED',
+                        'message': 'We couldn\'t proceed with your request. Please try again.'
                     }
                 time.sleep(2)
                 
                 # Check for errors
-                error_result = self.check_for_page_errors("STEP11")
+                error_result = self.check_for_page_errors()
                 if error_result:
                     return error_result
                 
                 # Click Continue again (as specified)
                 if not self.find_and_click_button(self.continue_button, "Continue button (final)"):
                     logger.error("Failed to click final Continue button")
+                    page_code = self.get_page_name_code()
                     return {
                         'status': False,
-                        'code': 'STEP11_FINAL_CONTINUE_FAILED',
-                        'message': 'Failed to click final Continue button'
+                        'code': f'{page_code}_FINAL_CONTINUE_FAILED',
+                        'message': 'We couldn\'t complete your request. Please try again.'
                     }
                 time.sleep(2)
                 
                 # Check for errors
-                error_result = self.check_for_page_errors("STEP11")
+                error_result = self.check_for_page_errors()
                 if error_result:
                     return error_result
             
@@ -225,8 +232,9 @@ class Step11MailingAddress(BaseStep):
             }
         except Exception as e:
             logger.error(f"❌ Step 11 failed with error: {str(e)}")
+            page_code = self.get_page_name_code()
             return {
                 'status': False,
-                'code': 'STEP11_EXCEPTION',
-                'message': f'Step 11 failed with error: {str(e)}'
+                'code': f'{page_code}_EXCEPTION',
+                'message': 'We encountered an issue processing your mailing address. Please try again.'
             }

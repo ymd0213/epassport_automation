@@ -489,9 +489,10 @@ class Step8PersonalInformation(BaseStep):
                         if error_messages:
                             error_message = ", ".join(error_messages)
                             logger.error(f"❌ Error found: {error_message}")
+                            page_code = self.get_page_name_code()
                             return {
                                 'status': False,
-                                'code': 'FORM_VALIDATION_ERROR',
+                                'code': f'{page_code}_FORM_VALIDATION_ERROR',
                                 'message': error_message
                             }
                 except:
@@ -499,9 +500,10 @@ class Step8PersonalInformation(BaseStep):
                     error_text = error_alert.text.strip()
                     if error_text:
                         logger.error(f"❌ General error found: {error_text}")
+                        page_code = self.get_page_name_code()
                         return {
                             'status': False,
-                            'code': 'PESONAL_INFORMATION_ERROR',
+                            'code': f'{page_code}_PERSONAL_INFORMATION_ERROR',
                             'message': error_text
                         }
         except:
@@ -905,10 +907,11 @@ class Step8PersonalInformation(BaseStep):
             logger.info("Clicking Continue button...")
             if not self.find_and_click_button(self.continue_button, "Continue button"):
                 logger.error("Failed to click Continue button")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'STEP8_BUTTON_CLICK_FAILED',
-                    'message': 'Failed to click Continue button'
+                    'code': f'{page_code}_BUTTON_CLICK_FAILED',
+                    'message': 'We couldn\'t proceed with your request. Please try again.'
                 }
             
             # Wait 2 seconds after clicking continue button
@@ -917,7 +920,7 @@ class Step8PersonalInformation(BaseStep):
             
             # Check for errors after final Continue button click
             logger.info("Checking for errors after clicking Continue...")
-            error_result = self.check_for_page_errors("STEP8")
+            error_result = self.check_for_page_errors()
             if error_result:
                 return error_result
             
@@ -930,8 +933,9 @@ class Step8PersonalInformation(BaseStep):
             
         except Exception as e:
             logger.error(f"❌ Step 8 failed with error: {str(e)}")
+            page_code = self.get_page_name_code()
             return {
                 'status': False,
-                'code': 'STEP8_EXCEPTION',
-                'message': f'Step 8 failed with error: {str(e)}'
+                'code': f'{page_code}_EXCEPTION',
+                'message': 'We encountered an issue processing your personal information. Please try again.'
             }

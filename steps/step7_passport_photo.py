@@ -162,15 +162,16 @@ class Step7PassportPhoto(BaseStep):
             logger.info("Clicking initial Continue button...")
             if not self.find_and_click_button(self.initial_continue_button, "initial Continue button"):
                 logger.error("Failed to click initial Continue button")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'STEP7_INITIAL_BUTTON_FAILED',
-                    'message': 'Failed to click initial Continue button'
+                    'code': f'{page_code}_INITIAL_BUTTON_FAILED',
+                    'message': 'We couldn\'t proceed with your request. Please try again.'
                 }
             
             # Wait 2 seconds and check for errors
             time.sleep(2)
-            error_result = self.check_for_page_errors("STEP7")
+            error_result = self.check_for_page_errors()
             if error_result:
                 return error_result
             
@@ -190,10 +191,11 @@ class Step7PassportPhoto(BaseStep):
                     photo_path = temp_photo_path
                 else:
                     logger.error("Failed to download photo from URL")
+                    page_code = self.get_page_name_code()
                     return {
                         'status': False,
-                        'code': 'PHOTO_DOWNLOAD_FAILED',
-                        'message': f'Failed to download photo from URL: {photo_url}'
+                        'code': f'{page_code}_PHOTO_DOWNLOAD_FAILED',
+                        'message': 'We couldn\'t retrieve your photo. Please check the photo URL and try again.'
                     }
             else:
                 # Fallback to local file if no URL provided
@@ -208,14 +210,15 @@ class Step7PassportPhoto(BaseStep):
                         os.unlink(temp_photo_path)
                     except:
                         pass
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'STEP7_UPLOAD_FAILED',
-                    'message': 'Failed to upload passport photo'
+                    'code': f'{page_code}_UPLOAD_FAILED',
+                    'message': 'We couldn\'t process your photo upload. Please check your photo and try again.'
                 }
             
             # Wait for upload to process
-            time.sleep(3)
+            time.sleep(5)
             
             # Clean up temporary photo file if it was created
             if temp_photo_path and os.path.exists(temp_photo_path):
@@ -229,15 +232,16 @@ class Step7PassportPhoto(BaseStep):
             logger.info("Clicking Continue button after upload...")
             if not self.find_and_click_button(self.continue_after_upload, "Continue button after upload"):
                 logger.error("Failed to click Continue button after upload")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'STEP7_UPLOAD_BUTTON_FAILED',
-                    'message': 'Failed to click Continue button after upload'
+                    'code': f'{page_code}_UPLOAD_BUTTON_FAILED',
+                    'message': 'We couldn\'t proceed after uploading your photo. Please try again.'
                 }
             
             # Wait 2 seconds and check for errors
-            time.sleep(2)
-            error_result = self.check_for_page_errors("STEP7")
+            time.sleep(5)
+            error_result = self.check_for_page_errors()
             if error_result:
                 return error_result
             
@@ -254,7 +258,7 @@ class Step7PassportPhoto(BaseStep):
                         
                         # Wait 2 seconds and check for errors
                         time.sleep(2)
-                        error_result = self.check_for_page_errors("STEP7")
+                        error_result = self.check_for_page_errors()
                         if error_result:
                             return error_result
                         
@@ -279,9 +283,10 @@ class Step7PassportPhoto(BaseStep):
                 if photo_error_heading and "Sorry, we can't accept your photo" in photo_error_heading.text:
                     error_message = photo_error_heading.text
                     logger.error(f"❌ Photo error found: {error_message}")
+                    page_code = self.get_page_name_code()
                     return {
                         'status': False,
-                        'code': 'PHOTO_ERROR',
+                        'code': f'{page_code}_PHOTO_ERROR',
                         'message': error_message
                     }
             except:
@@ -289,16 +294,18 @@ class Step7PassportPhoto(BaseStep):
             
             # If we get here, no final Continue button was found and no photo error
             logger.error("❌ Your passport photo is not correct - Final Continue button not found")
+            page_code = self.get_page_name_code()
             return {
                 'status': False,
-                'code': 'CONTINUE_BUTTON_NOT_FOUND',
-                'message': 'Final Continue button not found after photo upload'
+                'code': f'{page_code}_CONTINUE_BUTTON_NOT_FOUND',
+                'message': 'We couldn\'t complete your photo submission. Please verify your photo meets the requirements and try again.'
             }
             
         except Exception as e:
             logger.error(f"❌ Step 7 failed with error: {str(e)}")
+            page_code = self.get_page_name_code()
             return {
                 'status': False,
-                'code': 'STEP7_EXCEPTION',
-                'message': f'Step 7 failed with error: {str(e)}'
+                'code': f'{page_code}_EXCEPTION',
+                'message': 'We encountered an issue processing your photo. Please try again.'
             }

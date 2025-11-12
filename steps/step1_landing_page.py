@@ -58,16 +58,18 @@ class Step1LandingPage(BaseStep):
                 }
             else:
                 logger.error("❌ Step 1 failed - Could not find or click Get Started button")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'GET_STARTED_BUTTON_FAILED',
-                    'message': 'Could not find or click Get Started button'
+                    'code': f'{page_code}_GET_STARTED_BUTTON_FAILED',
+                    'message': 'We couldn\'t start your application. Please try again.'
                 }
                 
         except Exception as e:
             logger.error(f"❌ Step 1 failed with error: {str(e)}")
+            page_code = self.get_page_name_code()
             return {
                 'status': False,
-                'code': 'STEP1_EXCEPTION',
-                'message': f'Step 1 failed with error: {str(e)}'
+                'code': f'{page_code}_EXCEPTION',
+                'message': 'We encountered an issue starting your application. Please try again.'
             }

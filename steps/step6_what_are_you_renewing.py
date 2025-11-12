@@ -289,29 +289,32 @@ class Step6WhatAreYouRenewing(BaseStep):
             
             if not continue_button_element:
                 logger.error("Continue button not found")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'CONTINUE_BUTTON_NOT_FOUND',
-                    'message': 'Continue button not found on the page'
+                    'code': f'{page_code}_CONTINUE_BUTTON_NOT_FOUND',
+                    'message': 'We couldn\'t proceed with your request. Please try again.'
                 }
             
             # Check if continue button is disabled
             if not continue_button_element.is_enabled():
                 logger.error("Continue button is disabled")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'CONTINUE_BUTTON_DISABLED',
-                    'message': 'Continue button is disabled - form validation failed'
+                    'code': f'{page_code}_CONTINUE_BUTTON_DISABLED',
+                    'message': 'Please check your information and try again.'
                 }
             
             # Click Continue button
             logger.info("Clicking Continue button...")
             if not self.find_and_click_button(self.continue_button, "Continue button"):
                 logger.error("Failed to click Continue button")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'STEP6_BUTTON_CLICK_FAILED',
-                    'message': 'Failed to click Continue button'
+                    'code': f'{page_code}_BUTTON_CLICK_FAILED',
+                    'message': 'We couldn\'t proceed with your request. Please try again.'
                 }
             
 
@@ -321,7 +324,7 @@ class Step6WhatAreYouRenewing(BaseStep):
             
             # Check for errors FIRST before looking for Continue button
             logger.info("Checking for errors after clicking Continue...")
-            error_result = self.check_for_page_errors("STEP6")
+            error_result = self.check_for_page_errors()
             if error_result:
                 return error_result
             
@@ -341,7 +344,7 @@ class Step6WhatAreYouRenewing(BaseStep):
                         
                         # Wait 2 seconds and check for errors after second click
                         time.sleep(2)
-                        error_result = self.check_for_page_errors("STEP6")
+                        error_result = self.check_for_page_errors()
                         if error_result:
                             return error_result
                         
@@ -362,22 +365,24 @@ class Step6WhatAreYouRenewing(BaseStep):
             
             # If Continue button not found, check for errors again
             logger.warning("Continue button not found after waiting, checking for errors...")
-            error_result = self.check_for_page_errors("STEP6")
+            error_result = self.check_for_page_errors()
             if error_result:
                 return error_result
             
             # If we get here, no Continue button was found and no error message
             logger.error("❌ Continue button not found and no error message displayed")
+            page_code = self.get_page_name_code()
             return {
                 'status': False,
-                'code': 'STEP6_CONTINUE_NOT_FOUND',
-                'message': 'Continue button not found after form submission and no error message displayed'
+                'code': f'{page_code}_CONTINUE_NOT_FOUND',
+                'message': 'We couldn\'t complete your request. Please try again.'
             }
             
         except Exception as e:
             logger.error(f"❌ Step 6 failed with error: {str(e)}")
+            page_code = self.get_page_name_code()
             return {
                 'status': False,
-                'code': 'STEP6_EXCEPTION',
-                'message': f'Step 6 failed with error: {str(e)}'
+                'code': f'{page_code}_EXCEPTION',
+                'message': 'We encountered an issue processing your request. Please try again.'
             }

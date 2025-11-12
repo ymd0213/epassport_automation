@@ -56,16 +56,18 @@ class Step3EligibilityRequirements(BaseStep):
                 }
             else:
                 logger.error("❌ Step 3 failed - Could not find or click Continue button")
+                page_code = self.get_page_name_code()
                 return {
                     'status': False,
-                    'code': 'CONTINUE_BUTTON_FAILED',
-                    'message': 'Could not find or click Continue button'
+                    'code': f'{page_code}_CONTINUE_BUTTON_FAILED',
+                    'message': 'We couldn\'t proceed with your request. Please try again.'
                 }
                 
         except Exception as e:
             logger.error(f"❌ Step 3 failed with error: {str(e)}")
+            page_code = self.get_page_name_code()
             return {
                 'status': False,
-                'code': 'STEP3_EXCEPTION',
-                'message': f'Step 3 failed with error: {str(e)}'
+                'code': f'{page_code}_EXCEPTION',
+                'message': 'We encountered an issue processing your request. Please try again.'
             }
