@@ -395,10 +395,35 @@ class Step15Payment(BaseStep):
                 return error_result
             
             logger.info("✅ Step 15 completed successfully - Payment form submitted")
+            
+            # Wait for confirmation page to load
+            time.sleep(20)
+            
+            # Scrape the application number from the confirmation page
+            renewal_application_id = None
+            try:
+                from selenium.webdriver.common.by import By
+                from selenium.webdriver.support.ui import WebDriverWait
+                from selenium.webdriver.support import expected_conditions as EC
+                
+                logger.info("Scraping renewal application number...")
+                
+                # Find the span with class "pii-mask" containing the application number
+                wait = WebDriverWait(self.driver, 30)
+                app_number_element = wait.until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "span.pii-mask"))
+                )
+                renewal_application_id = app_number_element.text.strip()
+                logger.info(f"✅ Renewal Application Number: {renewal_application_id}")
+                    
+            except Exception as e:
+                logger.error(f"❌ Could not scrape renewal application number: {str(e)}")
+            
             return {
                 'status': True,
                 'code': 'SUCCESS',
-                'message': 'Step 15 completed successfully - Payment form submitted'
+                'message': 'Step 15 completed successfully - Payment form submitted',
+                'renewal_application_id': renewal_application_id
             }
             
         except Exception as e:

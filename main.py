@@ -656,7 +656,7 @@ def extract_step_result(step_result):
         return False, 'INVALID_RESULT', 'Invalid step result type'
 
 
-def update_application_status(application_id, renewal_status, renewal_error=None):
+def update_application_status(application_id, renewal_status, renewal_error=None, renewal_application_id=None):
     """
     Update application status via backend API
     
@@ -664,6 +664,7 @@ def update_application_status(application_id, renewal_status, renewal_error=None
         application_id: The application ID
         renewal_status: "2" for error in steps 1-14, "3" for error in step 15, "5" for success
         renewal_error: Dict with code and message (optional, for failures)
+        renewal_application_id: The renewal application number from the government website (optional, for success)
         
     Returns:
         bool: True if update was successful, False otherwise
@@ -685,6 +686,10 @@ def update_application_status(application_id, renewal_status, renewal_error=None
         # Add renewal_error if provided (for failed cases)
         if renewal_error:
             request_body["renewal_error"] = json.dumps(renewal_error)
+        
+        # Add renewal_application_id if provided (for success cases)
+        if renewal_application_id:
+            request_body["renewal_application_id"] = str(renewal_application_id)
         
         logger.info(f"Updating application status for ID {application_id}: {request_body}")
         
@@ -720,13 +725,16 @@ def process_single_application(driver, passport_data, app_index, total_apps):
     data = passport_data.get('data', {})
     application_id = passport_data.get('id', 'Unknown')
     
-    # Merge top-level fields (billing_info, photo_url) into data for easier access in steps
+    # Merge top-level fields (billing_info, photo_url, application_id) into data for easier access in steps
     # This ensures all steps receive complete data in a single object
     if 'billing_info' in passport_data:
         data['billing_info'] = passport_data['billing_info']
     
     if 'photo_url' in passport_data:
         data['photo_url'] = passport_data['photo_url']
+    
+    # Add application_id to data for database updates
+    data['application_id'] = application_id
     
     # Get applicant name for logging
     applicant_name = f"{data.get('first_name', 'Unknown')} {data.get('last_name', 'Unknown')}"
@@ -740,6 +748,7 @@ def process_single_application(driver, passport_data, app_index, total_apps):
     results = {}
     failed_step = None
     failed_error = None
+    renewal_application_id = None
     
     try:
         # Define all steps with their configurations
@@ -778,6 +787,11 @@ def process_single_application(driver, passport_data, app_index, total_apps):
             # Extract result details
             success, code, message = extract_step_result(step_result)
             results[step_key] = success
+            
+            # Capture renewal_application_id from Step 15 if present
+            if step_num == 15 and isinstance(step_result, dict) and 'renewal_application_id' in step_result:
+                renewal_application_id = step_result['renewal_application_id']
+                logger.info(f"Captured renewal application ID: {renewal_application_id}")
             
             if not success:
                 print(f"❌ Step {step_num} failed: {message}")
@@ -831,12 +845,18 @@ def process_single_application(driver, passport_data, app_index, total_apps):
             print(f"\n🎉 APPLICATION {app_index + 1} COMPLETED SUCCESSFULLY!")
             print("="*50)
             
-            # Update backend with success status
-            update_application_status(application_id, "5")
+            # Update backend with success status and renewal application ID
+            if renewal_application_id:
+                print(f"Renewal Application ID: {renewal_application_id}")
+                update_application_status(application_id, "5", renewal_application_id=renewal_application_id)
+            else:
+                logger.warning("Renewal application ID not captured from Step 15")
+                update_application_status(application_id, "5")
             
             return {
                 'success': True,
-                'results': results
+                'results': results,
+                'renewal_application_id': renewal_application_id
             }
         
     except Exception as e:
