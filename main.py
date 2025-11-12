@@ -304,83 +304,108 @@ class UndetectedWebAutomation:
             
             logger.info(f"Cloudflare captcha iframe found: id={captcha_iframe.get_attribute('id')}, title={captcha_iframe.get_attribute('title')}")
             
-            # For Cloudflare Turnstile, try clicking the iframe directly first
+            # Switch to captcha iframe and find the checkbox element
             try:
-                logger.info("Attempting to click Cloudflare captcha iframe directly...")
-                # Scroll into view
+                logger.info("Switching to Cloudflare captcha iframe...")
+                # Scroll into view first
                 self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", captcha_iframe)
                 time.sleep(1)
                 
-                # Try multiple click methods
-                try:
-                    # Method 1: JavaScript click
-                    self.driver.execute_script("arguments[0].click();", captcha_iframe)
-                    logger.info("✅ Clicked Cloudflare captcha iframe using JavaScript")
-                except:
-                    # Method 2: ActionChains click
-                    from selenium.webdriver.common.action_chains import ActionChains
-                    actions = ActionChains(self.driver)
-                    actions.move_to_element(captcha_iframe).click().perform()
-                    logger.info("✅ Clicked Cloudflare captcha iframe using ActionChains")
+                # Switch into the iframe
+                self.driver.switch_to.frame(captcha_iframe)
                 
-                # Wait a moment for the click to register
-                time.sleep(2)
+                # Wait a moment for iframe content to load
+                time.sleep(1)
                 
-            except Exception as direct_click_error:
-                logger.debug(f"Direct iframe click failed: {str(direct_click_error)}, trying to click inside iframe...")
+                # Find the checkbox element based on the actual HTML structure
+                # The checkbox is: <input type="checkbox"> inside <label class="cb-lb">
+                checkbox_selectors = [
+                    "label.cb-lb input[type='checkbox']",  # Most specific: checkbox inside label
+                    "input[type='checkbox']",  # Direct checkbox
+                    "label.cb-lb",  # The label containing the checkbox
+                    ".cb-lb",  # Label class
+                    "label[class*='cb-lb']",  # Label with cb-lb in class
+                ]
                 
-                # Fallback: Switch to captcha iframe and click inside
-                try:
-                    logger.info("Switching to Cloudflare captcha iframe...")
-                    self.driver.switch_to.frame(captcha_iframe)
+                checkbox = None
+                checkbox_element = None
+                
+                # Try multiple times to find the checkbox (it may load with delay)
+                for attempt in range(5):
+                    if attempt > 0:
+                        time.sleep(1)
+                        logger.debug(f"Retry attempt {attempt + 1} to find checkbox...")
                     
-                    # Wait for captcha elements to load
-                    wait = WebDriverWait(self.driver, 10)
-                    
-                    # Try to find and click the captcha checkbox/button inside the iframe
-                    checkbox_selectors = [
-                        "input[type='checkbox']",
-                        "label",
-                        "span.mark",
-                        "div.mark",
-                        "#challenge-stage",
-                        "body",
-                        "*[role='checkbox']",
-                        ".cb-container",
-                        ".mark"
-                    ]
-                    
-                    checkbox = None
                     for selector in checkbox_selectors:
                         try:
+                            logger.debug(f"Trying selector: {selector}")
                             elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                            for elem in elements:
-                                if elem.is_displayed():
-                                    checkbox = elem
-                                    logger.info(f"Found captcha element with selector: {selector}")
+                            
+                            if elements:
+                                for elem in elements:
+                                    try:
+                                        if elem.is_displayed():
+                                            # Prefer the actual checkbox input over the label
+                                            if "input" in selector:
+                                                checkbox_element = elem
+                                                logger.info(f"✅ Found checkbox input with selector: {selector}")
+                                            elif not checkbox_element:
+                                                checkbox = elem
+                                                logger.info(f"Found checkbox label/container with selector: {selector}")
+                                            break
+                                    except Exception as e:
+                                        logger.debug(f"Error checking element visibility: {str(e)}")
+                                        continue
+                                if checkbox_element or checkbox:
                                     break
-                            if checkbox:
-                                break
-                        except:
+                        except Exception as e:
+                            logger.debug(f"Selector {selector} error: {str(e)}")
                             continue
                     
-                    if checkbox:
-                        logger.info("Clicking Cloudflare captcha element inside iframe...")
-                        try:
-                            checkbox.click()
-                        except:
-                            self.driver.execute_script("arguments[0].click();", checkbox)
-                        logger.info("✅ Clicked captcha element inside iframe")
-                    
-                    # Switch back to default content
-                    self.driver.switch_to.default_content()
-                    
-                except Exception as iframe_error:
-                    logger.warning(f"Error clicking inside iframe: {str(iframe_error)}")
+                    if checkbox_element or checkbox:
+                        break
+                
+                # Use checkbox_element (input) if found, otherwise use checkbox (label)
+                target_element = checkbox_element if checkbox_element else checkbox
+                
+                if target_element:
+                    logger.info(f"Clicking Cloudflare captcha checkbox element...")
                     try:
-                        self.driver.switch_to.default_content()
-                    except:
-                        pass
+                        # Scroll element into view
+                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target_element)
+                        time.sleep(0.5)
+                        
+                        # Try regular click first
+                        target_element.click()
+                        logger.info("✅ Clicked checkbox using regular click")
+                    except Exception as click_error:
+                        logger.debug(f"Regular click failed: {str(click_error)}, trying JavaScript click...")
+                        try:
+                            # Fallback to JavaScript click
+                            self.driver.execute_script("arguments[0].click();", target_element)
+                            logger.info("✅ Clicked checkbox using JavaScript")
+                        except Exception as js_error:
+                            logger.warning(f"JavaScript click also failed: {str(js_error)}")
+                            # Try clicking parent label if checkbox failed
+                            if checkbox_element and checkbox:
+                                try:
+                                    logger.info("Trying to click parent label...")
+                                    checkbox.click()
+                                    logger.info("✅ Clicked parent label")
+                                except:
+                                    pass
+                else:
+                    logger.warning("Could not find checkbox element inside captcha iframe")
+                
+                # Switch back to default content
+                self.driver.switch_to.default_content()
+                
+            except Exception as iframe_error:
+                logger.warning(f"Error interacting with captcha checkbox: {str(iframe_error)}")
+                try:
+                    self.driver.switch_to.default_content()
+                except:
+                    pass
             
             # Wait for captcha to complete
             logger.info("Waiting for Cloudflare captcha to complete...")
