@@ -5,6 +5,7 @@ Handles comprehensive personal information form with conditional logic
 
 import time
 import logging
+import re
 from .base_step import BaseStep
 
 logger = logging.getLogger(__name__)
@@ -922,6 +923,7 @@ class Step8PersonalInformation(BaseStep):
             # Occupation
             occupation = self.passport_data.get('occupation', '')
             if occupation:
+                occupation = re.sub(r'[^a-zA-Z0-9]', '', occupation)
                 if not self.find_and_input_text(self.occupation, occupation, "occupation"):
                     logger.error("Failed to input occupation")
                     return False
@@ -930,6 +932,7 @@ class Step8PersonalInformation(BaseStep):
             # Employer or school
             employer_or_school = self.passport_data.get('employer_or_school', '')
             if employer_or_school:
+                employer_or_school = re.sub(r'[^a-zA-Z0-9]', '', employer_or_school)
                 if not self.find_and_input_text(self.employer_or_school, employer_or_school, "employer or school"):
                     logger.error("Failed to input employer or school")
                     return False
