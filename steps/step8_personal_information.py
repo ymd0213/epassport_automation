@@ -272,6 +272,67 @@ class Step8PersonalInformation(BaseStep):
             "ZI": {"name": "Zimbabwe", "value": "ZWE"}
         }
         
+        # State code to full name mapping for state of birth combo box
+        self.state_mapping = {
+            "AL": "Alabama",
+            "AK": "Alaska",
+            "AS": "American Samoa",
+            "AZ": "Arizona",
+            "AR": "Arkansas",
+            "CA": "California",
+            "CO": "Colorado",
+            "CT": "Connecticut",
+            "DE": "Delaware",
+            "DC": "District Of Columbia",
+            "FL": "Florida",
+            "GA": "Georgia",
+            "GU": "Guam",
+            "HI": "Hawaii",
+            "ID": "Idaho",
+            "IL": "Illinois",
+            "IN": "Indiana",
+            "IA": "Iowa",
+            "KS": "Kansas",
+            "KY": "Kentucky",
+            "LA": "Louisiana",
+            "ME": "Maine",
+            "MD": "Maryland",
+            "MA": "Massachusetts",
+            "MI": "Michigan",
+            "UM": "Midway Islands",
+            "MN": "Minnesota",
+            "MS": "Mississippi",
+            "MO": "Missouri",
+            "MT": "Montana",
+            "NE": "Nebraska",
+            "NV": "Nevada",
+            "NH": "New Hampshire",
+            "NJ": "New Jersey",
+            "NM": "New Mexico",
+            "NY": "New York",
+            "NC": "North Carolina",
+            "ND": "North Dakota",
+            "MP": "Northern Mariana Islands",
+            "OH": "Ohio",
+            "OK": "Oklahoma",
+            "OR": "Oregon",
+            "PA": "Pennsylvania",
+            "PR": "Puerto Rico",
+            "RI": "Rhode Island",
+            "SC": "South Carolina",
+            "SD": "South Dakota",
+            "TN": "Tennessee",
+            "TX": "Texas",
+            "VI": "U.S. Virgin Islands",
+            "UT": "Utah",
+            "VT": "Vermont",
+            "VA": "Virginia",
+            "WA": "Washington",
+            "WV": "West Virginia",
+            "WI": "Wisconsin",
+            "WY": "Wyoming"
+        }
+        
         # First name input
         self.first_name = {
             'css_selector': 'input[id="givenName"]',
@@ -812,7 +873,11 @@ class Step8PersonalInformation(BaseStep):
             # State of birth (combo box by name)
             state_birth = self.passport_data.get('state_birth', '')
             if state_birth:
-                if not self.find_and_select_combo_box(self.state_of_birth, state_birth, "state of birth"):
+                # Map state code to full state name for combo box search
+                state_name = self.state_mapping.get(state_birth.upper(), state_birth)
+                if state_name != state_birth:
+                    logger.info(f"Converting state code '{state_birth}' to full name '{state_name}' for state of birth")
+                if not self.find_and_select_combo_box(self.state_of_birth, state_name, "state of birth"):
                     logger.error("Failed to select state of birth")
                     return False
                 time.sleep(0.5)
