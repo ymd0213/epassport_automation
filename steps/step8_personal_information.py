@@ -672,42 +672,6 @@ class Step8PersonalInformation(BaseStep):
                     return False
                 time.sleep(0.5)
             
-            # Handle former name logic
-            former_name = self.passport_data.get('former__name', '')
-            if former_name == 1 or former_name == "1":
-                logger.info("Former name is 1, clicking Add Other Names button...")
-                if not self.find_and_click_button(self.add_other_names_button, "Add Other Names button"):
-                    logger.error("Failed to click Add Other Names button")
-                    return False
-                time.sleep(1)
-                
-                # Fill former name A
-                former_name_a = self.passport_data.get('former_name_a', '')
-                if former_name_a:
-                    if not self.find_and_input_text(self.former_name_a, former_name_a, "former name A"):
-                        logger.error("Failed to input former name A")
-                        return False
-                    time.sleep(0.5)
-                
-                # Fill former name B
-                former_name_b = self.passport_data.get('former_name_b', '')
-                if former_name_b:
-                    if not self.find_and_input_text(self.former_name_b, former_name_b, "former name B"):
-                        logger.error("Failed to input former name B")
-                        return False
-                    time.sleep(0.5)
-                
-                # Click Add Name button
-                if not self.find_and_click_button(self.add_name_button, "Add Name button"):
-                    logger.error("Failed to click Add Name button")
-                    return False
-                time.sleep(1)
-                
-                # Check for errors after Add Name button click
-                error_result = self.check_for_errors()
-                if error_result:
-                    return error_result
-            
             # Fill phone number
             logger.info("Filling phone number...")
             phone_number = self.passport_data.get('phone_number', '')
