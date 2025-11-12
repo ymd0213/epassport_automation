@@ -203,6 +203,181 @@ class UndetectedWebAutomation:
             logger.error(f"Element not found: {str(e)}")
             return None
     
+    def handle_cloudflare_captcha(self, timeout=30):
+        """
+        Handle Cloudflare v2 captcha by clicking the checkbox if present
+        
+        Args:
+            timeout (int): Maximum time to wait for captcha to appear and complete (default: 30 seconds)
+            
+        Returns:
+            bool: True if captcha was found and clicked, False if no captcha found
+        """
+        try:
+            from selenium.webdriver.common.by import By
+            from selenium.webdriver.support.ui import WebDriverWait
+            from selenium.webdriver.support import expected_conditions as EC
+            
+            logger.info("Checking for Cloudflare captcha...")
+            
+            # Wait a moment for page to fully load
+            time.sleep(2)
+            
+            # Look for Cloudflare captcha iframe (Turnstile)
+            # Based on actual iframe structure: id="cf-chl-widget-*", title="Widget containing a Cloudflare security challenge"
+            captcha_selectors = [
+                "iframe[id^='cf-chl-widget-']",  # Most specific: id starts with cf-chl-widget-
+                "iframe[title*='Widget containing a Cloudflare security challenge']",
+                "iframe[title*='Cloudflare security challenge']",
+                "iframe[src*='challenges.cloudflare.com/cdn-cgi/challenge-platform']",
+                "iframe[src*='challenges.cloudflare.com']",
+                "iframe[src*='cloudflare.com/cdn-cgi/challenge-platform']",
+                "iframe[id*='cf-chl']",
+                "iframe[title*='challenge']"
+            ]
+            
+            captcha_iframe = None
+            for selector in captcha_selectors:
+                try:
+                    iframes = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    if iframes:
+                        # Check if iframe is visible
+                        for iframe in iframes:
+                            if iframe.is_displayed():
+                                captcha_iframe = iframe
+                                logger.info(f"Found Cloudflare captcha iframe with selector: {selector}")
+                                break
+                        if captcha_iframe:
+                            break
+                except Exception as e:
+                    logger.debug(f"Selector {selector} not found: {str(e)}")
+                    continue
+            
+            if not captcha_iframe:
+                logger.info("No Cloudflare captcha found - proceeding normally")
+                return False
+            
+            logger.info(f"Cloudflare captcha iframe found: id={captcha_iframe.get_attribute('id')}, title={captcha_iframe.get_attribute('title')}")
+            
+            # For Cloudflare Turnstile, try clicking the iframe directly first
+            try:
+                logger.info("Attempting to click Cloudflare captcha iframe directly...")
+                # Scroll into view
+                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", captcha_iframe)
+                time.sleep(1)
+                
+                # Try multiple click methods
+                try:
+                    # Method 1: JavaScript click
+                    self.driver.execute_script("arguments[0].click();", captcha_iframe)
+                    logger.info("✅ Clicked Cloudflare captcha iframe using JavaScript")
+                except:
+                    # Method 2: ActionChains click
+                    from selenium.webdriver.common.action_chains import ActionChains
+                    actions = ActionChains(self.driver)
+                    actions.move_to_element(captcha_iframe).click().perform()
+                    logger.info("✅ Clicked Cloudflare captcha iframe using ActionChains")
+                
+                # Wait a moment for the click to register
+                time.sleep(2)
+                
+            except Exception as direct_click_error:
+                logger.debug(f"Direct iframe click failed: {str(direct_click_error)}, trying to click inside iframe...")
+                
+                # Fallback: Switch to captcha iframe and click inside
+                try:
+                    logger.info("Switching to Cloudflare captcha iframe...")
+                    self.driver.switch_to.frame(captcha_iframe)
+                    
+                    # Wait for captcha elements to load
+                    wait = WebDriverWait(self.driver, 10)
+                    
+                    # Try to find and click the captcha checkbox/button inside the iframe
+                    checkbox_selectors = [
+                        "input[type='checkbox']",
+                        "label",
+                        "span.mark",
+                        "div.mark",
+                        "#challenge-stage",
+                        "body",
+                        "*[role='checkbox']",
+                        ".cb-container",
+                        ".mark"
+                    ]
+                    
+                    checkbox = None
+                    for selector in checkbox_selectors:
+                        try:
+                            elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                            for elem in elements:
+                                if elem.is_displayed():
+                                    checkbox = elem
+                                    logger.info(f"Found captcha element with selector: {selector}")
+                                    break
+                            if checkbox:
+                                break
+                        except:
+                            continue
+                    
+                    if checkbox:
+                        logger.info("Clicking Cloudflare captcha element inside iframe...")
+                        try:
+                            checkbox.click()
+                        except:
+                            self.driver.execute_script("arguments[0].click();", checkbox)
+                        logger.info("✅ Clicked captcha element inside iframe")
+                    
+                    # Switch back to default content
+                    self.driver.switch_to.default_content()
+                    
+                except Exception as iframe_error:
+                    logger.warning(f"Error clicking inside iframe: {str(iframe_error)}")
+                    try:
+                        self.driver.switch_to.default_content()
+                    except:
+                        pass
+            
+            # Wait for captcha to complete
+            logger.info("Waiting for Cloudflare captcha to complete...")
+            time.sleep(5)
+            
+            # Check if captcha iframe still exists and is visible
+            try:
+                remaining_iframes = self.driver.find_elements(By.CSS_SELECTOR, captcha_selectors[0])
+                still_visible = False
+                for iframe in remaining_iframes:
+                    if iframe.is_displayed():
+                        still_visible = True
+                        break
+                
+                if not still_visible:
+                    logger.info("✅ Cloudflare captcha completed successfully (iframe no longer visible)")
+                    return True
+                else:
+                    logger.info("Captcha iframe still present, waiting longer...")
+                    time.sleep(5)
+                    # Check again
+                    remaining_iframes = self.driver.find_elements(By.CSS_SELECTOR, captcha_selectors[0])
+                    still_visible = False
+                    for iframe in remaining_iframes:
+                        if iframe.is_displayed():
+                            still_visible = True
+                            break
+                    if not still_visible:
+                        logger.info("✅ Cloudflare captcha completed successfully")
+                    return True
+            except:
+                logger.info("✅ Cloudflare captcha interaction completed")
+                return True
+                
+        except Exception as e:
+            logger.warning(f"Error handling Cloudflare captcha: {str(e)}")
+            try:
+                self.driver.switch_to.default_content()
+            except:
+                pass
+            return False
+    
     def clear_browser_cache(self):
         """
         Clear browser cache, cookies, and storage after each application
@@ -758,6 +933,14 @@ def main():
             print(f"Page Title: {page_info['title']}")
             print(f"Current URL: {page_info['url']}")
         
+        # Handle Cloudflare captcha if present
+        print("\nChecking for Cloudflare captcha...")
+        captcha_found = automation.handle_cloudflare_captcha()
+        if captcha_found:
+            print("✅ Cloudflare captcha was found and clicked")
+        else:
+            print("ℹ️  No Cloudflare captcha found - proceeding normally")
+        
         # Wait 15 seconds after initial navigation
         print("\nWaiting 15 seconds after initial navigation...")
         time.sleep(15)
@@ -819,6 +1002,12 @@ def main():
                 print("🔄 Preparing for next application...")
                 print(">"*50)
                 automation.navigate_to_url(target_url)
+                
+                # Handle Cloudflare captcha if present
+                captcha_found = automation.handle_cloudflare_captcha()
+                if captcha_found:
+                    print("✅ Cloudflare captcha was found and clicked")
+                
                 time.sleep(10)
                 
             except KeyboardInterrupt:
@@ -835,6 +1024,8 @@ def main():
                 # Try to recover by navigating back to start
                 try:
                     automation.navigate_to_url(target_url)
+                    # Handle Cloudflare captcha if present
+                    automation.handle_cloudflare_captcha()
                     time.sleep(10)
                 except:
                     pass
