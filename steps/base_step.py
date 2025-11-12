@@ -521,6 +521,95 @@ class BaseStep:
         except Exception as e:
             logger.error(f"❌ Error selecting from {description}: {str(e)}")
             return False
+    
+    def find_and_select_state_combo_box(self, combo_selector, state_code, state_name, description="state combo box"):
+        """
+        Find and select from a state combo box (uses state code in data-testid)
+        
+        Args:
+            combo_selector (dict): Dictionary containing selector strategies  
+            state_code (str): 2-letter state code (e.g., "KS" for Kansas)
+            state_name (str): Full state name (e.g., "Kansas")
+            description (str): Description of the combo box for logging
+            
+        Returns:
+            bool: True if selection was successful, False otherwise
+        """
+        try:
+            logger.info(f"Looking for {description}...")
+            
+            # Try different selector strategies to find the input field
+            selectors = []
+            
+            if combo_selector.get('css_selector'):
+                selectors.append((By.CSS_SELECTOR, combo_selector.get('css_selector')))
+            
+            if combo_selector.get('xpath'):
+                selectors.append((By.XPATH, combo_selector.get('xpath')))
+            
+            if combo_selector.get('data_testid'):
+                selectors.append((By.CSS_SELECTOR, f'[data-testid="{combo_selector.get("data_testid")}"]'))
+            
+            if combo_selector.get('id'):
+                selectors.append((By.ID, combo_selector.get('id')))
+            
+            combo_input = None
+            for by, selector in selectors:
+                if selector:
+                    try:
+                        combo_input = self.wait.until(EC.presence_of_element_located((by, selector)))
+                        logger.info(f"Found {description} using {by}: {selector}")
+                        break
+                    except:
+                        continue
+            
+            if combo_input:
+                # Clear and type state name
+                combo_input.clear()
+                time.sleep(0.3)
+                combo_input.send_keys(state_name)
+                time.sleep(0.5)  # Wait for dropdown to appear and filter
+                
+                # Try to find and click the option using state code in data-testid
+                try:
+                    # First try: use state code in data-testid (e.g., combo-box-option-KS)
+                    option_selector = f'[data-testid="combo-box-option-{state_code}"]'
+                    option = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, option_selector)))
+                    option.click()
+                    logger.info(f"✅ Successfully selected '{state_name}' ({state_code}) from {description}")
+                    return True
+                except:
+                    # Second try: Find option by data-value attribute
+                    try:
+                        option_selector = f'li[data-value="{state_code}"]'
+                        option = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, option_selector)))
+                        option.click()
+                        logger.info(f"✅ Successfully selected '{state_name}' using data-value from {description}")
+                        return True
+                    except:
+                        # Third try: Press Enter to select the first filtered option
+                        try:
+                            from selenium.webdriver.common.keys import Keys
+                            combo_input.send_keys(Keys.ENTER)
+                            logger.info(f"✅ Successfully selected '{state_name}' using Enter key from {description}")
+                            return True
+                        except:
+                            # Fourth try: Find any visible option in the list
+                            try:
+                                visible_option = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'li.usa-combo-box__list-option:not([hidden])')))
+                                visible_option.click()
+                                logger.info(f"✅ Successfully selected visible option from {description}")
+                                return True
+                            except:
+                                logger.error(f"❌ Could not find or click option for '{state_name}' ({state_code}) in {description}")
+                                return False
+            else:
+                logger.error(f"❌ Could not find {description}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Error selecting from {description}: {str(e)}")
+            return False
 
     def check_for_page_errors(self, step_name=None):
         """

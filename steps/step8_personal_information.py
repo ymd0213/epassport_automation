@@ -834,14 +834,17 @@ class Step8PersonalInformation(BaseStep):
                     return False
                 time.sleep(0.5)
             
-            # State of birth (combo box by name)
+            # State of birth (combo box with state code)
             state_birth = self.passport_data.get('state_birth', '')
             if state_birth:
-                # Map state code to full state name for combo box search
-                state_name = self.state_mapping.get(state_birth.upper(), state_birth)
+                # Map state code to full state name for combo box
+                state_code = state_birth.upper()
+                state_name = self.state_mapping.get(state_code, state_birth)
                 if state_name != state_birth:
                     logger.info(f"Converting state code '{state_birth}' to full name '{state_name}' for state of birth")
-                if not self.find_and_select_combo_box(self.state_of_birth, state_name, "state of birth"):
+                
+                # Use the new state-specific combo box function
+                if not self.find_and_select_state_combo_box(self.state_of_birth, state_code, state_name, "state of birth"):
                     logger.error("Failed to select state of birth")
                     return False
                 time.sleep(0.5)
