@@ -932,7 +932,8 @@ def main():
         if page_info:
             print(f"Page Title: {page_info['title']}")
             print(f"Current URL: {page_info['url']}")
-        
+
+        time.sleep(5)
         # Handle Cloudflare captcha if present
         print("\nChecking for Cloudflare captcha...")
         captcha_found = automation.handle_cloudflare_captcha()
@@ -943,7 +944,7 @@ def main():
         
         # Wait 15 seconds after initial navigation
         print("\nWaiting 15 seconds after initial navigation...")
-        time.sleep(15)
+        time.sleep(10)
         
         print("\n" + "="*70)
         print("🔄 STARTING CONTINUOUS APPLICATION PROCESSING")
