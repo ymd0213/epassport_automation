@@ -11,6 +11,7 @@ import subprocess
 import os
 import json
 import requests
+import argparse
 from dotenv import load_dotenv
 from steps.step1_landing_page import Step1LandingPage
 from steps.step2_what_you_need import Step2WhatYouNeed
@@ -297,9 +298,14 @@ class UndetectedWebAutomation:
             self.driver = None
 
 
-def fetch_single_passport_application():
+def fetch_single_passport_application(props=None):
     """
     Fetch a single passport application from backend API
+    
+    Args:
+        props (dict): Optional dictionary containing:
+            - application_processing_method (str): "normal" or "failed"
+            - error_code (str): Required if method is "failed", e.g., "STEP6_ERROR"
     
     Returns:
         dict: Application data with 'id' and 'data' keys, or None if no application available
@@ -307,17 +313,44 @@ def fetch_single_passport_application():
     try:
         # Load environment variables
         load_dotenv()
-        api_endpoint = os.getenv('API_ENDPOINT')
         
-        if not api_endpoint:
-            logger.error("API_ENDPOINT not found in .env file")
-            return None
+        # Default to "normal" if props not provided
+        if props is None:
+            props = {}
         
-        logger.info(f"Fetching passport application from API: {api_endpoint}")
+        method = props.get('application_processing_method', 'normal')
         
-        # Make GET request to the API with timeout
-        response = requests.get(api_endpoint, timeout=10)  # 10 second timeout
-        response.raise_for_status()
+        if method == 'failed':
+            # Use error endpoint for failed applications
+            api_endpoint = os.getenv('API_ENDPOINT_ERROR')
+            
+            if not api_endpoint:
+                logger.error("API_ENDPOINT_ERROR not found in .env file")
+                return None
+            
+            error_code = props.get('error_code')
+            if not error_code:
+                logger.error("error_code is required when application_processing_method is 'failed'")
+                return None
+            
+            logger.info(f"Fetching failed passport application from API: {api_endpoint} with error_code: {error_code}")
+            
+            # Make POST request to the API with error_code parameter
+            response = requests.post(api_endpoint, json={'error_code': error_code}, timeout=10)
+            response.raise_for_status()
+        else:
+            # Use normal endpoint for normal applications
+            api_endpoint = os.getenv('API_ENDPOINT')
+            
+            if not api_endpoint:
+                logger.error("API_ENDPOINT not found in .env file")
+                return None
+            
+            logger.info(f"Fetching passport application from API: {api_endpoint}")
+            
+            # Make GET request to the API with timeout
+            response = requests.get(api_endpoint, timeout=10)  # 10 second timeout
+            response.raise_for_status()
         
         # Log response status and content type
         logger.info(f"API response status: {response.status_code}, Content-Type: {response.headers.get('content-type')}")
@@ -655,7 +688,40 @@ def process_single_application(driver, passport_data, app_index, total_apps):
 
 def main():
     """Main function to run the undetected automation in continuous loop"""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Undetected ChromeDriver Web Automation')
+    parser.add_argument(
+        '--method',
+        type=str,
+        choices=['normal', 'failed'],
+        default='normal',
+        help='Application processing method: normal (default) or failed'
+    )
+    parser.add_argument(
+        '--error-code',
+        type=str,
+        default=None,
+        help='Error code for failed applications (required when method is "failed"), e.g., STEP6_ERROR'
+    )
+    
+    args = parser.parse_args()
+    
+    # Validate arguments
+    if args.method == 'failed' and not args.error_code:
+        parser.error('--error-code is required when --method is "failed"')
+    
+    # Prepare props for fetch_single_passport_application
+    props = {
+        'application_processing_method': args.method
+    }
+    if args.error_code:
+        props['error_code'] = args.error_code
+    
     print("Undetected ChromeDriver Web Automation - Continuous Mode")
+    print("=" * 50)
+    print(f"Processing Method: {args.method}")
+    if args.error_code:
+        print(f"Error Code: {args.error_code}")
     print("=" * 50)
     
     # Create automation instance once
@@ -710,7 +776,7 @@ def main():
                 print(">"*70)
                 
                 # Fetch single application from API
-                passport_data = fetch_single_passport_application()
+                passport_data = fetch_single_passport_application(props)
                 
                 if not passport_data:
                     print("⏸️  No application data available from API")
