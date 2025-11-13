@@ -992,12 +992,14 @@ def main():
                     print("⏸️  No application data available from API")
                     print("⏳ Waiting 20 seconds before next check...")
                     time.sleep(20)
+                    
+                    # Check for captcha during idle period
+                    print("\nChecking for Cloudflare captcha during idle period...")
+                    captcha_found = automation.handle_cloudflare_captcha()
+                    if captcha_found:
+                        print("✅ Cloudflare captcha was found and clicked during idle period")
+                    
                     continue
-
-                # Handle Cloudflare captcha if present
-                captcha_found = automation.handle_cloudflare_captcha()
-                if captcha_found:
-                    print("✅ Cloudflare captcha was found and clicked")
                 
                 # Process the application
                 total_processed += 1
@@ -1036,6 +1038,14 @@ def main():
                 automation.navigate_to_url(target_url)
                 
                 time.sleep(10)
+                
+                # Handle Cloudflare captcha if present
+                print("\nChecking for Cloudflare captcha...")
+                captcha_found = automation.handle_cloudflare_captcha()
+                if captcha_found:
+                    print("✅ Cloudflare captcha was found and clicked")
+                else:
+                    print("ℹ️  No Cloudflare captcha found - proceeding normally")
                 
             except KeyboardInterrupt:
                 print("\n\n" + "="*70)
