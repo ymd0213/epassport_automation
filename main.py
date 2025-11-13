@@ -993,6 +993,11 @@ def main():
                     print("⏳ Waiting 20 seconds before next check...")
                     time.sleep(20)
                     continue
+
+                # Handle Cloudflare captcha if present
+                captcha_found = automation.handle_cloudflare_captcha()
+                if captcha_found:
+                    print("✅ Cloudflare captcha was found and clicked")
                 
                 # Process the application
                 total_processed += 1
@@ -1029,11 +1034,6 @@ def main():
                 print("🔄 Preparing for next application...")
                 print(">"*50)
                 automation.navigate_to_url(target_url)
-                
-                # Handle Cloudflare captcha if present
-                captcha_found = automation.handle_cloudflare_captcha()
-                if captcha_found:
-                    print("✅ Cloudflare captcha was found and clicked")
                 
                 time.sleep(10)
                 
