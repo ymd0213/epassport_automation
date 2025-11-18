@@ -178,15 +178,22 @@ class Step7PassportPhoto(BaseStep):
             # Upload passport photo
             logger.info("Uploading passport photo...")
             
-            # Get photo URL from passport data
+            # Get photo URL from passport data (prioritize ai_photo_url over photo_url)
+            ai_photo_url = self.passport_data.get('ai_photo_url')
             photo_url = self.passport_data.get('photo_url')
             photo_path = None
             temp_photo_path = None
             
-            if photo_url:
-                logger.info(f"Photo URL provided: {photo_url}")
+            # Use ai_photo_url if available, otherwise fall back to photo_url
+            url_to_use = ai_photo_url if ai_photo_url else photo_url
+            
+            if url_to_use:
+                if ai_photo_url:
+                    logger.info(f"AI Photo URL provided: {url_to_use}")
+                else:
+                    logger.info(f"Photo URL provided: {url_to_use}")
                 # Download photo from URL
-                temp_photo_path = self.download_photo_from_url(photo_url)
+                temp_photo_path = self.download_photo_from_url(url_to_use)
                 if temp_photo_path:
                     photo_path = temp_photo_path
                 else:
@@ -199,7 +206,7 @@ class Step7PassportPhoto(BaseStep):
                     }
             else:
                 # Fallback to local file if no URL provided
-                logger.warning("No photo_url provided in passport data, using local fallback")
+                logger.warning("No photo_url or ai_photo_url provided in passport data, using local fallback")
                 photo_path = "accept-man.jpg"
             
             if not self.find_and_upload_file(photo_path, "passport photo upload"):
