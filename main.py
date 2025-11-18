@@ -12,7 +12,13 @@ import os
 import json
 import requests
 import argparse
+import uuid
+import base64
+import zipfile
+import tempfile
+from urllib.parse import urlparse
 from dotenv import load_dotenv
+
 from steps.step1_landing_page import Step1LandingPage
 from steps.step2_what_you_need import Step2WhatYouNeed
 from steps.step3_eligibility_requirements import Step3EligibilityRequirements
@@ -44,7 +50,197 @@ class UndetectedWebAutomation:
         """
         self.driver = None
         self.headless = headless
-        
+        self.proxy_url = None
+        self.proxy_host = None
+        self.proxy_port = None
+        self.proxy_username = None
+        self.proxy_password = None
+        self.proxy_extension_path = None
+        self.proxy_server = None
+        self.load_proxy_config()
+    
+    def load_proxy_config(self):
+        """Load and parse proxy configuration from environment variables"""
+        try:
+            # Load environment variables
+            load_dotenv()
+            
+            # Method 1: Try to get proxy URL from single environment variable
+            self.proxy_url = os.getenv('PROXY_URL')
+            
+            if self.proxy_url:
+                # Parse the proxy URL
+                parsed = urlparse(self.proxy_url)
+                
+                self.proxy_host = parsed.hostname
+                self.proxy_port = parsed.port
+                self.proxy_username = parsed.username
+                self.proxy_password = parsed.password
+                
+                # Determine the scheme (http, https, socks5, etc.)
+                scheme = parsed.scheme if parsed.scheme else 'http'
+                
+                # Log proxy configuration (hide credentials)
+                if self.proxy_username:
+                    logger.info(f"Proxy configuration loaded from PROXY_URL: {scheme}://{self.proxy_username}:***@{self.proxy_host}:{self.proxy_port}")
+                else:
+                    logger.info(f"Proxy configuration loaded from PROXY_URL: {scheme}://{self.proxy_host}:{self.proxy_port}")
+            else:
+                # Method 2: Try to get proxy configuration from separate variables
+                self.proxy_host = os.getenv('PROXY_HOST')
+                self.proxy_port = os.getenv('PROXY_PORT')
+                self.proxy_username = os.getenv('PROXY_USERNAME')
+                self.proxy_password = os.getenv('PROXY_PASSWORD')
+                
+                if self.proxy_host and self.proxy_port:
+                    # Convert port to integer
+                    try:
+                        self.proxy_port = int(self.proxy_port)
+                    except ValueError:
+                        logger.error(f"Invalid PROXY_PORT value: {self.proxy_port}")
+                        self.proxy_host = None
+                        return
+                    
+                    # Build proxy_url for compatibility
+                    scheme = 'http'  # Default to http
+                    if self.proxy_username and self.proxy_password:
+                        self.proxy_url = f"{scheme}://{self.proxy_username}:{self.proxy_password}@{self.proxy_host}:{self.proxy_port}"
+                        logger.info(f"Proxy configuration loaded from separate variables: {scheme}://{self.proxy_username}:***@{self.proxy_host}:{self.proxy_port}")
+                    else:
+                        self.proxy_url = f"{scheme}://{self.proxy_host}:{self.proxy_port}"
+                        logger.info(f"Proxy configuration loaded from separate variables: {scheme}://{self.proxy_host}:{self.proxy_port}")
+                else:
+                    logger.info("No proxy configuration found in environment variables")
+                
+        except Exception as e:
+            logger.error(f"Error loading proxy configuration: {str(e)}")
+            self.proxy_url = None
+            self.proxy_host = None
+    
+    def start_local_proxy_server(self):
+        """Start local proxy server for authentication"""
+        try:
+            from proxy_server import ProxyServer
+            
+            logger.info("🚀 Starting local proxy server for authentication...")
+            self.proxy_server = ProxyServer(local_host='127.0.0.1', local_port=8888)
+            self.proxy_server.start()
+            
+            # Wait a moment for server to start
+            time.sleep(1)
+            
+            logger.info("✅ Local proxy server started on 127.0.0.1:8888")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to start local proxy server: {str(e)}")
+            return False
+    
+    def stop_local_proxy_server(self):
+        """Stop local proxy server"""
+        if self.proxy_server:
+            try:
+                self.proxy_server.stop()
+                self.proxy_server = None
+                logger.info("Local proxy server stopped")
+            except Exception as e:
+                logger.warning(f"Error stopping proxy server: {str(e)}")
+    
+    def create_proxy_extension(self):
+        """
+        Create a Chrome extension for proxy authentication
+        Returns the path to the extension ZIP file
+        """
+        try:
+            if not self.proxy_username or not self.proxy_password:
+                return None
+            
+            # Create a temporary directory for the extension files
+            extension_dir = tempfile.mkdtemp(prefix='proxy_ext_')
+            
+            # Create manifest.json (using manifest v2 for compatibility)
+            manifest_json = {
+                "version": "1.0.0",
+                "manifest_version": 2,
+                "name": "Chrome Proxy Auth",
+                "permissions": [
+                    "webRequest",
+                    "webRequestBlocking",
+                    "<all_urls>",
+                    "proxy",
+                    "tabs",
+                    "storage"
+                ],
+                "background": {
+                    "scripts": ["background.js"],
+                    "persistent": True
+                },
+                "minimum_chrome_version": "22.0.0"
+            }
+            
+            # Create background.js with proxy authentication
+            # Escape special characters in credentials
+            username = self.proxy_username.replace('\\', '\\\\').replace('"', '\\"')
+            password = self.proxy_password.replace('\\', '\\\\').replace('"', '\\"')
+            
+            background_js = f"""
+// Proxy authentication extension
+console.log('='.repeat(50));
+console.log('Proxy Auth Extension Starting...');
+console.log('Target: {self.proxy_host}:{self.proxy_port}');
+console.log('Username: {username}');
+console.log('='.repeat(50));
+
+// Authentication credentials
+var credentials = {{
+    username: "{username}",
+    password: "{password}"
+}};
+
+// Handle authentication requests
+function handleAuthRequest(details) {{
+    console.log('🔐 Authentication requested!');
+    console.log('   URL:', details.url);
+    console.log('   Challenger:', details.challenger);
+    console.log('   isProxy:', details.isProxy);
+    console.log('   Providing credentials...');
+    
+    return {{
+        authCredentials: credentials
+    }};
+}}
+
+// Register the authentication handler
+chrome.webRequest.onAuthRequired.addListener(
+    handleAuthRequest,
+    {{urls: ["<all_urls>"]}},
+    ['blocking']
+);
+
+console.log('✅ Proxy authentication handler registered');
+console.log('   Listening for auth requests on all URLs');
+console.log('='.repeat(50));
+"""
+            
+            # Write manifest.json
+            manifest_path = os.path.join(extension_dir, 'manifest.json')
+            with open(manifest_path, 'w', encoding='utf-8') as f:
+                json.dump(manifest_json, f, indent=2)
+            
+            # Write background.js
+            background_path = os.path.join(extension_dir, 'background.js')
+            with open(background_path, 'w', encoding='utf-8') as f:
+                f.write(background_js)
+            
+            logger.info(f"✅ Proxy authentication extension created at: {extension_dir}")
+            logger.info(f"   Extension files: manifest.json, background.js")
+            
+            return extension_dir
+            
+        except Exception as e:
+            logger.error(f"Error creating proxy extension: {str(e)}")
+            return None
+    
     def get_chrome_version(self):
         """Get Chrome browser version"""
         try:
@@ -57,13 +253,26 @@ class UndetectedWebAutomation:
         except:
             pass
         return None
-        
+    
     def create_chrome_options(self):
         """Create fresh Chrome options for each attempt"""
         options = uc.ChromeOptions()
         
         if self.headless:
             options.add_argument("--headless")
+        
+        # Add proxy configuration if available
+        if self.proxy_host and self.proxy_port:
+            if self.proxy_username and self.proxy_password:
+                # Authenticated proxy - use local proxy server (no auth popup)
+                logger.info(f"🔐 Using local proxy server for authentication")
+                options.add_argument("--proxy-server=http://127.0.0.1:8888")
+                logger.info(f"✅ Proxy configured: 127.0.0.1:8888 → {self.proxy_host}:{self.proxy_port}")
+            else:
+                # Non-authenticated proxy - direct connection
+                proxy_server = f"http://{self.proxy_host}:{self.proxy_port}"
+                options.add_argument(f"--proxy-server={proxy_server}")
+                logger.info(f"🌐 Non-authenticated proxy configured: {proxy_server}")
         
         # Additional options for better performance
         options.add_argument("--no-sandbox")
@@ -78,20 +287,24 @@ class UndetectedWebAutomation:
         options.add_argument("--start-maximized")
         
         return options
-        
+    
     def setup_driver(self):
-        """Setup undetected Chrome WebDriver with auto-downloaded ChromeDriver"""
+        """
+        Setup undetected Chrome WebDriver with auto-downloaded ChromeDriver
+        """
         try:
             logger.info("Setting up undetected ChromeDriver...")
             
-            # Use auto-download for best version compatibility
-            logger.info("Using auto-downloaded ChromeDriver for optimal version compatibility...")
+            # Start local proxy server if authenticated proxy is configured
+            if self.proxy_host and self.proxy_username and self.proxy_password:
+                if not self.start_local_proxy_server():
+                    logger.error("Failed to start local proxy server")
+                    return False
             
             # Get Chrome version for better compatibility
             chrome_version = self.get_chrome_version()
             if chrome_version:
                 logger.info(f"Detected Chrome version: {chrome_version}")
-                # Extract major version number
                 try:
                     major_version = int(chrome_version.split('.')[0])
                 except:
@@ -100,52 +313,41 @@ class UndetectedWebAutomation:
                 major_version = None
                 logger.warning("Could not detect Chrome version")
             
-            # Try different approaches to handle version compatibility
-            # Method 1: Try auto-download first (best compatibility)
-            try:
-                logger.info("Method 1: Attempting auto-download ChromeDriver...")
-                options = self.create_chrome_options()
-                self.driver = uc.Chrome(options=options, version_main=None)
-                logger.info("✅ Undetected ChromeDriver setup successful with auto-download")
-                return True
-                
-            except Exception as e1:
-                logger.warning(f"Auto-download failed: {str(e1)}")
-                
-                # Method 2: Try auto-download with detected Chrome version
-                if major_version:
-                    try:
-                        logger.info(f"Method 2: Attempting auto-download with Chrome version {major_version}...")
-                        options = self.create_chrome_options()
-                        self.driver = uc.Chrome(options=options, version_main=major_version)
-                        logger.info(f"✅ Undetected ChromeDriver setup successful with auto-download and version {major_version}")
-                        return True
-                        
-                    except Exception as e2:
-                        logger.warning(f"Auto-download with version {major_version} failed: {str(e2)}")
-                
-                # Method 3: Try auto-download with version 140
+            # Try different versions systematically
+            versions_to_try = []
+            
+            # Start with detected version if available
+            if major_version:
+                versions_to_try.append(major_version)
+            
+            # Add common versions
+            versions_to_try.extend([None, 141, 140, 131, 130, 129])
+            
+            # Remove duplicates while preserving order
+            seen = set()
+            versions_to_try = [x for x in versions_to_try if not (x in seen or seen.add(x))]
+            
+            logger.info(f"Will try ChromeDriver versions in order: {versions_to_try}")
+            
+            # Try each version
+            for idx, version in enumerate(versions_to_try, 1):
                 try:
-                    logger.info("Method 3: Attempting auto-download with version 140...")
+                    version_str = "auto-detect" if version is None else f"version {version}"
+                    logger.info(f"Method {idx}/{len(versions_to_try)}: Attempting {version_str}...")
+                    
                     options = self.create_chrome_options()
-                    self.driver = uc.Chrome(options=options, version_main=140)
-                    logger.info("✅ Undetected ChromeDriver setup successful with auto-download and version 140")
+                    self.driver = uc.Chrome(options=options, version_main=version)
+                    
+                    logger.info(f"✅ Undetected ChromeDriver setup successful with {version_str}")
                     return True
                     
-                except Exception as e3:
-                    logger.warning(f"Auto-download with version 140 failed: {str(e3)}")
-                    
-                    # Method 4: Try auto-download with version 141 as fallback
-                    try:
-                        logger.info("Method 4: Attempting auto-download with version 141...")
-                        options = self.create_chrome_options()
-                        self.driver = uc.Chrome(options=options, version_main=141)
-                        logger.info("✅ Undetected ChromeDriver setup successful with auto-download and version 141")
-                        return True
-                        
-                    except Exception as e4:
-                        logger.error(f"All auto-download methods failed. Last error: {str(e4)}")
-                        return False
+                except Exception as e:
+                    logger.warning(f"Failed with {version_str}: {str(e)[:100]}")
+                    continue
+            
+            # If we get here, all versions failed
+            logger.error("All ChromeDriver versions failed to initialize")
+            return False
             
         except Exception as e:
             logger.error(f"Failed to setup undetected ChromeDriver: {str(e)}")
@@ -477,6 +679,10 @@ class UndetectedWebAutomation:
             logger.error(f"Error closing WebDriver: {str(e)}")
         finally:
             self.driver = None
+            
+            # Stop local proxy server if running
+            self.stop_local_proxy_server()
+    
 
 
 def fetch_single_passport_application(props=None):
@@ -616,7 +822,8 @@ def fetch_single_passport_application(props=None):
                     'id': application_id,
                     'data': parsed_data,
                     'billing_info': application.get('billing_info'),
-                    'photo_url': application.get('photo_url')
+                    'photo_url': application.get('photo_url'),
+                    'ai_photo_url': application.get('ai_photo_url')
                 }
             else:
                 logger.warning("Application has no 'data' field")
@@ -725,13 +932,16 @@ def process_single_application(driver, passport_data, app_index, total_apps):
     data = passport_data.get('data', {})
     application_id = passport_data.get('id', 'Unknown')
     
-    # Merge top-level fields (billing_info, photo_url, application_id) into data for easier access in steps
+    # Merge top-level fields (billing_info, photo_url, ai_photo_url, application_id) into data for easier access in steps
     # This ensures all steps receive complete data in a single object
     if 'billing_info' in passport_data:
         data['billing_info'] = passport_data['billing_info']
     
     if 'photo_url' in passport_data:
         data['photo_url'] = passport_data['photo_url']
+    
+    if 'ai_photo_url' in passport_data:
+        data['ai_photo_url'] = passport_data['ai_photo_url']
     
     # Add application_id to data for database updates
     data['application_id'] = application_id
@@ -1003,6 +1213,7 @@ def main():
                 
                 # Process the application
                 total_processed += 1
+                
                 app_results = process_single_application(
                     automation.driver, 
                     passport_data, 
@@ -1016,12 +1227,6 @@ def main():
                 else:
                     total_failed += 1
                 
-                # Clear browser cache after each application
-                print("\n" + ">"*50)
-                print("🧹 Clearing browser cache...")
-                print(">"*50)
-                automation.clear_browser_cache()
-                
                 # Print current session statistics
                 print("\n" + "="*70)
                 print("📊 SESSION STATISTICS")
@@ -1031,13 +1236,26 @@ def main():
                 print(f"Failed: {total_failed} ❌")
                 print("="*70)
                 
-                # Navigate back to start for next application
+                # Close and restart browser for next application (to apply fresh proxy settings)
                 print("\n" + ">"*50)
-                print("🔄 Preparing for next application...")
+                print("🔄 Restarting browser for next application...")
                 print(">"*50)
-                automation.navigate_to_url(target_url)
                 
-                time.sleep(10)
+                automation.close_driver()
+                time.sleep(2)
+                
+                # Setup driver again with fresh proxy settings
+                if not automation.setup_driver():
+                    print("❌ Failed to restart browser")
+                    print("⏳ Waiting 30 seconds before retry...")
+                    time.sleep(30)
+                    continue
+                
+                print("✅ Browser restarted successfully")
+                
+                # Navigate to the start URL
+                automation.navigate_to_url(target_url)
+                time.sleep(5)
                 
                 # Handle Cloudflare captcha if present
                 print("\nChecking for Cloudflare captcha...")
@@ -1046,6 +1264,8 @@ def main():
                     print("✅ Cloudflare captcha was found and clicked")
                 else:
                     print("ℹ️  No Cloudflare captcha found - proceeding normally")
+                
+                time.sleep(5)
                 
             except KeyboardInterrupt:
                 print("\n\n" + "="*70)
