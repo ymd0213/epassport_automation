@@ -16,6 +16,7 @@ import uuid
 import base64
 import zipfile
 import tempfile
+import threading
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 
@@ -724,7 +725,7 @@ def update_application_status(application_id, renewal_status, renewal_error=None
     
     Args:
         application_id: The application ID
-        renewal_status: "2" for error in steps 1-14, "3" for error in step 15, "5" for success
+        renewal_status: "11" for processing started, "2" for error in steps 1-14, "3" for error in step 15, "5" for success
         renewal_error: Dict with code and message (optional, for failures)
         renewal_application_id: The renewal application number from the government website (optional, for success)
         
@@ -806,6 +807,11 @@ def process_single_application(driver, passport_data, app_index, total_apps):
     print(f"# Application ID: {application_id}")
     print(f"# Applicant: {applicant_name}")
     print("#"*70)
+    
+    # Update application status to 11 (processing started)
+    print(f"📝 Updating application status to 11 (Processing Started)...")
+    update_application_status(application_id, "11")
+    print(f"✅ Application status updated to 11")
     
     results = {}
     failed_step = None
@@ -946,10 +952,91 @@ def process_single_application(driver, passport_data, app_index, total_apps):
         }
 
 
+def process_application_in_thread(passport_data, app_number, props):
+    """
+    Process a single application in a separate thread
+    
+    Args:
+        passport_data: Dictionary containing passport application data
+        app_number: Application number for display purposes
+        props: Properties for the application (method, error_code)
+    """
+    thread_id = threading.current_thread().name
+    print(f"\n🧵 [{thread_id}] Thread started for application #{app_number}")
+    
+    # Create automation instance for this thread
+    automation = UndetectedWebAutomation(headless=False)
+    
+    try:
+        # Target URL
+        target_url = "https://opr.travel.state.gov/"
+        
+        # Setup driver
+        print(f"🧵 [{thread_id}] Setting up browser...")
+        if not automation.setup_driver():
+            print(f"❌ [{thread_id}] Failed to setup browser")
+            return
+        
+        print(f"✅ [{thread_id}] Browser setup successful!")
+        time.sleep(1)
+        
+        # Navigate to the URL
+        print(f"🧵 [{thread_id}] Navigating to {target_url}...")
+        if not automation.navigate_to_url(target_url):
+            print(f"❌ [{thread_id}] Failed to navigate to {target_url}")
+            return
+            
+        print(f"✅ [{thread_id}] Successfully navigated to {target_url}")
+        
+        # Get page information
+        page_info = automation.get_page_info()
+        if page_info:
+            print(f"📄 [{thread_id}] Page Title: {page_info['title']}")
+        
+        time.sleep(5)
+        
+        # Handle Cloudflare captcha if present
+        print(f"\n🔍 [{thread_id}] Checking for Cloudflare captcha...")
+        captcha_found = automation.handle_cloudflare_captcha()
+        if captcha_found:
+            print(f"✅ [{thread_id}] Cloudflare captcha was found and clicked")
+        else:
+            print(f"ℹ️  [{thread_id}] No Cloudflare captcha found - proceeding normally")
+        
+        # Wait 10 seconds after initial navigation
+        print(f"\n⏳ [{thread_id}] Waiting 10 seconds after initial navigation...")
+        time.sleep(10)
+        
+        # Process the application
+        print(f"\n🚀 [{thread_id}] Starting application processing...")
+        app_results = process_single_application(
+            automation.driver, 
+            passport_data, 
+            app_number - 1,  # 0-based index
+            app_number  # Display as total
+        )
+        
+        # Print result
+        if app_results.get('success', False):
+            print(f"\n✅ [{thread_id}] Application #{app_number} completed successfully!")
+        else:
+            print(f"\n❌ [{thread_id}] Application #{app_number} failed")
+        
+    except Exception as e:
+        logger.error(f"[{thread_id}] Error in thread: {str(e)}")
+        print(f"❌ [{thread_id}] Error in thread: {str(e)}")
+    
+    finally:
+        # Close the browser and cleanup
+        print(f"\n🧹 [{thread_id}] Closing browser and cleaning up...")
+        automation.close_driver()
+        print(f"✅ [{thread_id}] Thread completed and browser closed")
+
+
 def main():
-    """Main function to run the undetected automation in continuous loop"""
+    """Main function to poll API and create threads for each application"""
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Undetected ChromeDriver Web Automation')
+    parser = argparse.ArgumentParser(description='Undetected ChromeDriver Web Automation with Threading')
     parser.add_argument(
         '--method',
         type=str,
@@ -977,71 +1064,26 @@ def main():
     if args.error_code:
         props['error_code'] = args.error_code
     
-    print("Undetected ChromeDriver Web Automation - Continuous Mode")
-    print("=" * 50)
+    print("Undetected ChromeDriver Web Automation - Threading Mode")
+    print("=" * 70)
     print(f"Processing Method: {args.method}")
     if args.error_code:
         print(f"Error Code: {args.error_code}")
-    print("=" * 50)
-    
-    # Create automation instance once
-    automation = UndetectedWebAutomation(headless=False)
+    print("=" * 70)
+    print("The system will poll the API every 20 seconds for new applications.")
+    print("Each application will be processed in a separate thread.")
+    print("Press Ctrl+C to stop the automation.\n")
     
     # Track statistics
     total_processed = 0
-    total_successful = 0
-    total_failed = 0
+    active_threads = []
     
-    # Target URL
-    target_url = "https://opr.travel.state.gov/"
-    
-    # Setup driver once at the beginning
     try:
-        if not automation.setup_driver():
-            print("Failed to setup undetected ChromeDriver")
-            return
-        
-        print("ChromeDriver setup successful!")
-        print("Waiting 1 seconds before navigation...")
-        time.sleep(1)
-        
-        # Initial navigation to the OPR website
-        if not automation.navigate_to_url(target_url):
-            print(f"Failed to navigate to {target_url}")
-            return
-            
-        print(f"Successfully navigated to {target_url}")
-        
-        # Get page information
-        page_info = automation.get_page_info()
-        if page_info:
-            print(f"Page Title: {page_info['title']}")
-            print(f"Current URL: {page_info['url']}")
-
-        time.sleep(5)
-        # Handle Cloudflare captcha if present
-        print("\nChecking for Cloudflare captcha...")
-        captcha_found = automation.handle_cloudflare_captcha()
-        if captcha_found:
-            print("✅ Cloudflare captcha was found and clicked")
-        else:
-            print("ℹ️  No Cloudflare captcha found - proceeding normally")
-        
-        # Wait 15 seconds after initial navigation
-        print("\nWaiting 15 seconds after initial navigation...")
-        time.sleep(10)
-        
-        print("\n" + "="*70)
-        print("🔄 STARTING CONTINUOUS APPLICATION PROCESSING")
-        print("="*70)
-        print("The system will continuously check for new applications from the API.")
-        print("Press Ctrl+C to stop the automation.\n")
-        
-        # Infinite loop to process applications
+        # Main polling loop
         while True:
             try:
                 print("\n" + ">"*70)
-                print(f"📡 Fetching next application from API...")
+                print(f"📡 Polling API for new applications...")
                 print(">"*70)
                 
                 # Fetch single application from API
@@ -1051,70 +1093,33 @@ def main():
                     print("⏸️  No application data available from API")
                     print("⏳ Waiting 20 seconds before next check...")
                     time.sleep(20)
-                    
-                    # Check for captcha during idle period
-                    print("\nChecking for Cloudflare captcha during idle period...")
-                    captcha_found = automation.handle_cloudflare_captcha()
-                    if captcha_found:
-                        print("✅ Cloudflare captcha was found and clicked during idle period")
-                    
                     continue
                 
-                # Process the application
+                # Application found - create a new thread
                 total_processed += 1
+                thread_name = f"App-{total_processed}"
                 
-                app_results = process_single_application(
-                    automation.driver, 
-                    passport_data, 
-                    total_processed - 1,  # 0-based index
-                    total_processed  # Display current count as total
+                print(f"\n✨ New application found! Creating thread '{thread_name}'...")
+                
+                # Create and start the thread
+                thread = threading.Thread(
+                    target=process_application_in_thread,
+                    args=(passport_data, total_processed, props),
+                    name=thread_name,
+                    daemon=True  # Daemon thread will exit when main program exits
                 )
+                thread.start()
+                active_threads.append(thread)
                 
-                # Update statistics
-                if app_results.get('success', False):
-                    total_successful += 1
-                else:
-                    total_failed += 1
+                print(f"✅ Thread '{thread_name}' started for application #{total_processed}")
                 
-                # Print current session statistics
-                print("\n" + "="*70)
-                print("📊 SESSION STATISTICS")
-                print("="*70)
-                print(f"Total Processed: {total_processed}")
-                print(f"Successful: {total_successful} ✅")
-                print(f"Failed: {total_failed} ❌")
-                print("="*70)
+                # Clean up finished threads
+                active_threads = [t for t in active_threads if t.is_alive()]
+                print(f"📊 Active threads: {len(active_threads)}")
                 
-                # Close and restart browser for next application (to apply fresh proxy settings)
-                print("\n" + ">"*50)
-                print("🔄 Restarting browser for next application...")
-                print(">"*50)
-                
-                automation.close_driver()
-                time.sleep(2)
-                
-                # Setup driver again with fresh proxy settings
-                if not automation.setup_driver():
-                    print("❌ Failed to restart browser")
-                    print("⏳ Waiting 30 seconds before retry...")
-                    time.sleep(30)
-                    continue
-                
-                print("✅ Browser restarted successfully")
-                
-                # Navigate to the start URL
-                automation.navigate_to_url(target_url)
-                time.sleep(5)
-                
-                # Handle Cloudflare captcha if present
-                print("\nChecking for Cloudflare captcha...")
-                captcha_found = automation.handle_cloudflare_captcha()
-                if captcha_found:
-                    print("✅ Cloudflare captcha was found and clicked")
-                else:
-                    print("ℹ️  No Cloudflare captcha found - proceeding normally")
-                
-                time.sleep(5)
+                # Wait 20 seconds before polling again
+                print("⏳ Waiting 20 seconds before next API poll...")
+                time.sleep(20)
                 
             except KeyboardInterrupt:
                 print("\n\n" + "="*70)
@@ -1123,33 +1128,33 @@ def main():
                 break
                 
             except Exception as e:
-                logger.error(f"Error in main loop: {str(e)}")
-                print(f"❌ Error in main loop: {str(e)}")
+                logger.error(f"Error in main polling loop: {str(e)}")
+                print(f"❌ Error in main polling loop: {str(e)}")
                 print("⏳ Waiting 20 seconds before retry...")
                 time.sleep(20)
-                # Try to recover by navigating back to start
-                try:
-                    automation.navigate_to_url(target_url)
-                    # Handle Cloudflare captcha if present
-                    automation.handle_cloudflare_captcha()
-                    time.sleep(10)
-                except:
-                    pass
     
     except Exception as e:
         logger.error(f"Critical error in automation: {str(e)}")
         print(f"❌ Critical error occurred: {str(e)}")
     
     finally:
+        # Wait for all active threads to complete
+        if active_threads:
+            print("\n" + "="*70)
+            print(f"⏳ Waiting for {len(active_threads)} active thread(s) to complete...")
+            print("="*70)
+            for thread in active_threads:
+                if thread.is_alive():
+                    print(f"⏳ Waiting for thread '{thread.name}' to complete...")
+                    thread.join(timeout=300)  # Wait up to 5 minutes per thread
+        
         # Print final summary
         print("\n" + "="*70)
         print("🏁 FINAL SESSION SUMMARY")
         print("="*70)
         print(f"Total Applications Processed: {total_processed}")
-        print(f"Successful: {total_successful} ✅")
-        print(f"Failed: {total_failed} ❌")
         print("="*70)
-        print("\n⚠️  Browser will remain open. Close manually if needed.")
+        print("\n✅ Automation stopped. All threads have been completed or terminated.")
 
 
 if __name__ == "__main__":
