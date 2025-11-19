@@ -3,12 +3,9 @@ Base step class for passport automation steps
 """
 
 import time
-import logging
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
-logger = logging.getLogger(__name__)
 
 
 class BaseStep:
@@ -38,8 +35,6 @@ class BaseStep:
             WebElement: The found element, or None if not found
         """
         try:
-            logger.info(f"Looking for {description}...")
-            
             # Try different selector strategies
             selectors = []
             
@@ -65,16 +60,13 @@ class BaseStep:
                 if selector:
                     try:
                         element = self.wait.until(EC.presence_of_element_located((by, selector)))
-                        logger.info(f"Found {description} using {by}: {selector}")
                         return element
                     except:
                         continue
             
-            logger.warning(f"Could not find {description}")
             return None
                 
         except Exception as e:
-            logger.error(f"❌ Error finding {description}: {str(e)}")
             return None
     
     def find_and_click_button(self, button_selector, description="button"):
@@ -89,8 +81,6 @@ class BaseStep:
             bool: True if button was found and clicked, False otherwise
         """
         try:
-            logger.info(f"Looking for {description}...")
-            
             # Try different selector strategies
             selectors = []
             
@@ -126,7 +116,6 @@ class BaseStep:
                 if selector:
                     try:
                         button = self.wait.until(EC.element_to_be_clickable((by, selector)))
-                        logger.info(f"Found {description} using {by}: {selector}")
                         break
                     except:
                         continue
@@ -138,24 +127,19 @@ class BaseStep:
                 
                 # Click the button
                 button.click()
-                logger.info(f"✅ Successfully clicked {description}")
                 return True
             else:
-                logger.error(f"❌ Could not find {description}")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Error clicking {description}: {str(e)}")
             return False
     
     def wait_for_page_load(self, timeout=10):
         """Wait for page to load completely"""
         try:
             self.wait.until(lambda driver: driver.execute_script("return document.readyState") == "complete")
-            logger.info("Page loaded completely")
             return True
         except Exception as e:
-            logger.warning(f"Page load timeout: {str(e)}")
             return False
     
     def get_page_title(self):
@@ -200,9 +184,7 @@ class BaseStep:
     
     def log_step_info(self):
         """Log current step information"""
-        logger.info(f"=== {self.step_name} ===")
-        logger.info(f"Page Title: {self.get_page_title()}")
-        logger.info(f"Current URL: {self.get_current_url()}")
+        pass
     
     def find_and_input_text(self, input_selector, text, description="input field"):
         """
@@ -217,8 +199,6 @@ class BaseStep:
             bool: True if input was successful, False otherwise
         """
         try:
-            logger.info(f"Looking for {description}...")
-            
             # Try different selector strategies
             selectors = []
             
@@ -239,7 +219,6 @@ class BaseStep:
                 if selector:
                     try:
                         input_field = self.wait.until(EC.presence_of_element_located((by, selector)))
-                        logger.info(f"Found {description} using {by}: {selector}")
                         break
                     except:
                         continue
@@ -255,10 +234,8 @@ class BaseStep:
                 try:
                     actual_value = input_field.get_attribute("value")
                     if actual_value == text:
-                        logger.info(f"✅ Successfully input '{text}' into {description}")
                         return True
                     else:
-                        logger.warning(f"Input verification failed: expected '{text}', got '{actual_value}'")
                         # Try one more time with a different approach
                         input_field.clear()
                         time.sleep(0.5)
@@ -268,21 +245,15 @@ class BaseStep:
                         time.sleep(0.5)
                         actual_value = input_field.get_attribute("value")
                         if actual_value == text:
-                            logger.info(f"✅ Successfully input '{text}' into {description} on retry")
                             return True
                         else:
-                            logger.error(f"❌ Failed to input '{text}' into {description} after retry")
                             return False
                 except Exception as e:
-                    logger.warning(f"Could not verify input for {description}: {str(e)}")
-                    logger.info(f"✅ Input '{text}' sent to {description} (verification skipped)")
                     return True
             else:
-                logger.error(f"❌ Could not find {description}")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Error inputting text into {description}: {str(e)}")
             return False
     
     def find_and_select_option(self, select_selector, option_value, description="select field"):
@@ -298,8 +269,6 @@ class BaseStep:
             bool: True if selection was successful, False otherwise
         """
         try:
-            logger.info(f"Looking for {description}...")
-            
             # Try different selector strategies
             selectors = []
             
@@ -320,7 +289,6 @@ class BaseStep:
                 if selector:
                     try:
                         select_field = self.wait.until(EC.presence_of_element_located((by, selector)))
-                        logger.info(f"Found {description} using {by}: {selector}")
                         break
                     except:
                         continue
@@ -329,14 +297,11 @@ class BaseStep:
                 from selenium.webdriver.support.ui import Select
                 select = Select(select_field)
                 select.select_by_value(option_value)
-                logger.info(f"✅ Successfully selected option '{option_value}' in {description}")
                 return True
             else:
-                logger.error(f"❌ Could not find {description}")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Error selecting option in {description}: {str(e)}")
             return False
     
     def find_and_click_radio(self, radio_selector, description="radio button"):
@@ -351,8 +316,6 @@ class BaseStep:
             bool: True if click was successful, False otherwise
         """
         try:
-            logger.info(f"Looking for {description}...")
-            
             # Try different selector strategies
             selectors = []
             
@@ -373,7 +336,6 @@ class BaseStep:
                 if selector:
                     try:
                         radio_button = self.wait.until(EC.element_to_be_clickable((by, selector)))
-                        logger.info(f"Found {description} using {by}: {selector}")
                         break
                     except:
                         continue
@@ -385,14 +347,11 @@ class BaseStep:
                 
                 # Click the radio button
                 radio_button.click()
-                logger.info(f"✅ Successfully clicked {description}")
                 return True
             else:
-                logger.error(f"❌ Could not find {description}")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Error clicking {description}: {str(e)}")
             return False
     
     def find_and_click_checkbox(self, checkbox_selector, description="checkbox"):
@@ -407,8 +366,6 @@ class BaseStep:
             bool: True if click was successful, False otherwise
         """
         try:
-            logger.info(f"Looking for {description}...")
-            
             # Try different selector strategies
             selectors = []
             
@@ -429,7 +386,6 @@ class BaseStep:
                 if selector:
                     try:
                         checkbox = self.wait.until(EC.element_to_be_clickable((by, selector)))
-                        logger.info(f"Found {description} using {by}: {selector}")
                         break
                     except:
                         continue
@@ -441,14 +397,11 @@ class BaseStep:
                 
                 # Click the checkbox
                 checkbox.click()
-                logger.info(f"✅ Successfully clicked {description}")
                 return True
             else:
-                logger.error(f"❌ Could not find {description}")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Error clicking {description}: {str(e)}")
             return False
     
     def find_and_select_combo_box(self, combo_selector, country_name, description="combo box"):
@@ -464,8 +417,6 @@ class BaseStep:
             bool: True if selection was successful, False otherwise
         """
         try:
-            logger.info(f"Looking for {description}...")
-            
             # Try different selector strategies
             selectors = []
             
@@ -486,7 +437,6 @@ class BaseStep:
                 if selector:
                     try:
                         combo_input = self.wait.until(EC.presence_of_element_located((by, selector)))
-                        logger.info(f"Found {description} using {by}: {selector}")
                         break
                     except:
                         continue
@@ -502,24 +452,19 @@ class BaseStep:
                     option_selector = f'[data-testid="combo-box-option-{country_name}"]'
                     option = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, option_selector)))
                     option.click()
-                    logger.info(f"✅ Successfully selected '{country_name}' from {description}")
                     return True
                 except:
                     # Fallback: try to click first option in the list
                     try:
                         first_option = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-testid*="combo-box-option"]')))
                         first_option.click()
-                        logger.info(f"✅ Successfully selected first option from {description}")
                         return True
                     except:
-                        logger.error(f"❌ Could not find option for '{country_name}' in {description}")
                         return False
             else:
-                logger.error(f"❌ Could not find {description}")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Error selecting from {description}: {str(e)}")
             return False
     
     def find_and_select_state_combo_box(self, combo_selector, state_code, state_name, description="state combo box"):
@@ -536,8 +481,6 @@ class BaseStep:
             bool: True if selection was successful, False otherwise
         """
         try:
-            logger.info(f"Looking for {description}...")
-            
             # Try different selector strategies to find the input field
             selectors = []
             
@@ -558,7 +501,6 @@ class BaseStep:
                 if selector:
                     try:
                         combo_input = self.wait.until(EC.presence_of_element_located((by, selector)))
-                        logger.info(f"Found {description} using {by}: {selector}")
                         break
                     except:
                         continue
@@ -576,7 +518,6 @@ class BaseStep:
                     option_selector = f'[data-testid="combo-box-option-{state_code}"]'
                     option = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, option_selector)))
                     option.click()
-                    logger.info(f"✅ Successfully selected '{state_name}' ({state_code}) from {description}")
                     return True
                 except:
                     # Second try: Find option by data-value attribute
@@ -584,31 +525,25 @@ class BaseStep:
                         option_selector = f'li[data-value="{state_code}"]'
                         option = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, option_selector)))
                         option.click()
-                        logger.info(f"✅ Successfully selected '{state_name}' using data-value from {description}")
                         return True
                     except:
                         # Third try: Press Enter to select the first filtered option
                         try:
                             from selenium.webdriver.common.keys import Keys
                             combo_input.send_keys(Keys.ENTER)
-                            logger.info(f"✅ Successfully selected '{state_name}' using Enter key from {description}")
                             return True
                         except:
                             # Fourth try: Find any visible option in the list
                             try:
                                 visible_option = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'li.usa-combo-box__list-option:not([hidden])')))
                                 visible_option.click()
-                                logger.info(f"✅ Successfully selected visible option from {description}")
                                 return True
                             except:
-                                logger.error(f"❌ Could not find or click option for '{state_name}' ({state_code}) in {description}")
                                 return False
             else:
-                logger.error(f"❌ Could not find {description}")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Error selecting from {description}: {str(e)}")
             return False
 
     def check_for_page_errors(self, step_name=None):
@@ -638,21 +573,18 @@ class BaseStep:
                     
                     if "usa-alert--success" in alert_classes:
                         # This is a success alert, not an error
-                        success_text = alert_element.text.strip()
-                        logger.info(f"✅ Success alert found in {step_name}: {success_text}")
                         return None  # This is success, not error
                     else:
                         # This is an error or warning alert
                         error_text = alert_element.text.strip()
                         if error_text:
-                            logger.error(f"❌ Error alert found in {step_name}: {error_text}")
                             return {
                                 'status': False,
                                 'code': f'{step_name}_ERROR',
                                 'message': error_text
                             }
             except Exception as e:
-                logger.debug(f"No usa-alert found: {e}")
+                pass
             
             # Look for inline error messages with errorMessage testid
             try:
@@ -666,20 +598,18 @@ class BaseStep:
                 
                 if error_messages:
                     error_message = ", ".join(error_messages)
-                    logger.error(f"❌ Inline error found in {step_name}: {error_message}")
                     return {
                         'status': False,
                         'code': f'{step_name}_VALIDATION_ERROR',
                         'message': error_message
                     }
             except Exception as e:
-                logger.debug(f"No inline error messages found: {e}")
+                pass
             
             # No errors found
             return None
             
         except Exception as e:
-            logger.warning(f"Error while checking for page errors: {str(e)}")
             return None
     
     def execute(self):
