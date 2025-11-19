@@ -650,11 +650,6 @@ def process_single_application(driver, passport_data, app_index, total_apps):
     print(f"# Applicant: {applicant_name}")
     print("#"*70)
     
-    # Update application status to 11 (processing started)
-    print(f"📝 Updating application status to 11 (Processing Started)...")
-    update_application_status(application_id, "11")
-    print(f"✅ Application status updated to 11")
-    
     results = {}
     failed_step = None
     failed_error = None
@@ -998,11 +993,23 @@ def main():
                     time.sleep(20)
                     continue
                 
-                # Application found - create a new thread
+                # Application found - update status immediately to prevent duplicate processing
+                application_id = passport_data.get('id', 'Unknown')
+                print(f"\n📝 Application {application_id} fetched - Updating status to 11 (Processing Started)...")
+                update_success = update_application_status(application_id, "11")
+                if update_success:
+                    print(f"✅ Application status updated to 11")
+                else:
+                    print(f"⚠️  Failed to update application status - skipping this application")
+                    print("⏳ Waiting 20 seconds before next check...")
+                    time.sleep(20)
+                    continue
+                
+                # Create a new thread
                 total_processed += 1
                 thread_name = f"App-{total_processed}"
                 
-                print(f"\n✨ New application found! Creating thread '{thread_name}'...")
+                print(f"\n✨ Creating thread '{thread_name}' for application {application_id}...")
                 
                 # Create and start the thread
                 thread = threading.Thread(
