@@ -841,14 +841,6 @@ def process_application_in_thread(passport_data, app_number, props, shared_proxy
         else:
             print(f"ℹ️  [{thread_id}] No Cloudflare captcha found - proceeding normally")
         
-        # Set browser zoom to 50%
-        try:
-            print(f"\n🔍 [{thread_id}] Setting browser zoom to 50%...")
-            automation.driver.execute_script("document.body.style.zoom='50%'")
-            print(f"✅ [{thread_id}] Browser zoom set to 50%")
-        except Exception as e:
-            print(f"⚠️  [{thread_id}] Failed to set zoom: {str(e)}")
-        
         # Wait 10 seconds after initial navigation
         print(f"\n⏳ [{thread_id}] Waiting 10 seconds after initial navigation...")
         time.sleep(10)

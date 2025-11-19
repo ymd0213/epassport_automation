@@ -143,9 +143,9 @@ class Step11MailingAddress(BaseStep):
                 time.sleep(2)
                 
                 # Check for errors after Edit Mailing Address button click
-                error_result = self.check_for_page_errors()
-                if error_result:
-                    return error_result
+                # error_result = self.check_for_page_errors()
+                # if error_result:
+                #     return error_result
                 
                 # Fill mailing address fields
                 addr1 = self.passport_data.get('mailing_address_1', '')
