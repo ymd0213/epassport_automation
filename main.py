@@ -35,8 +35,8 @@ from steps.step13_review_order import Step13ReviewOrder
 from steps.step14_statement_of_truth import Step14StatementOfTruth
 from steps.step15_payment import Step15Payment
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging (only errors)
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
@@ -80,11 +80,6 @@ class UndetectedWebAutomation:
                 # Determine the scheme (http, https, socks5, etc.)
                 scheme = parsed.scheme if parsed.scheme else 'http'
                 
-                # Log proxy configuration (hide credentials)
-                if self.proxy_username:
-                    logger.info(f"Proxy configuration loaded from PROXY_URL: {scheme}://{self.proxy_username}:***@{self.proxy_host}:{self.proxy_port}")
-                else:
-                    logger.info(f"Proxy configuration loaded from PROXY_URL: {scheme}://{self.proxy_host}:{self.proxy_port}")
             else:
                 # Method 2: Try to get proxy configuration from separate variables
                 self.proxy_host = os.getenv('PROXY_HOST')
@@ -105,12 +100,8 @@ class UndetectedWebAutomation:
                     scheme = 'http'  # Default to http
                     if self.proxy_username and self.proxy_password:
                         self.proxy_url = f"{scheme}://{self.proxy_username}:{self.proxy_password}@{self.proxy_host}:{self.proxy_port}"
-                        logger.info(f"Proxy configuration loaded from separate variables: {scheme}://{self.proxy_username}:***@{self.proxy_host}:{self.proxy_port}")
                     else:
                         self.proxy_url = f"{scheme}://{self.proxy_host}:{self.proxy_port}"
-                        logger.info(f"Proxy configuration loaded from separate variables: {scheme}://{self.proxy_host}:{self.proxy_port}")
-                else:
-                    logger.info("No proxy configuration found in environment variables")
                 
         except Exception as e:
             logger.error(f"Error loading proxy configuration: {str(e)}")
@@ -122,14 +113,12 @@ class UndetectedWebAutomation:
         try:
             from proxy_server import ProxyServer
             
-            logger.info("🚀 Starting local proxy server for authentication...")
             self.proxy_server = ProxyServer(local_host='127.0.0.1', local_port=8888)
             self.proxy_server.start()
             
             # Wait a moment for server to start
             time.sleep(1)
             
-            logger.info("✅ Local proxy server started on 127.0.0.1:8888")
             return True
             
         except Exception as e:
@@ -142,9 +131,8 @@ class UndetectedWebAutomation:
             try:
                 self.proxy_server.stop()
                 self.proxy_server = None
-                logger.info("Local proxy server stopped")
             except Exception as e:
-                logger.warning(f"Error stopping proxy server: {str(e)}")
+                pass
     
     def create_proxy_extension(self):
         """
@@ -232,9 +220,6 @@ console.log('='.repeat(50));
             with open(background_path, 'w', encoding='utf-8') as f:
                 f.write(background_js)
             
-            logger.info(f"✅ Proxy authentication extension created at: {extension_dir}")
-            logger.info(f"   Extension files: manifest.json, background.js")
-            
             return extension_dir
             
         except Exception as e:
@@ -265,14 +250,11 @@ console.log('='.repeat(50));
         if self.proxy_host and self.proxy_port:
             if self.proxy_username and self.proxy_password:
                 # Authenticated proxy - use local proxy server (no auth popup)
-                logger.info(f"🔐 Using local proxy server for authentication")
                 options.add_argument("--proxy-server=http://127.0.0.1:8888")
-                logger.info(f"✅ Proxy configured: 127.0.0.1:8888 → {self.proxy_host}:{self.proxy_port}")
             else:
                 # Non-authenticated proxy - direct connection
                 proxy_server = f"http://{self.proxy_host}:{self.proxy_port}"
                 options.add_argument(f"--proxy-server={proxy_server}")
-                logger.info(f"🌐 Non-authenticated proxy configured: {proxy_server}")
         
         # Additional options for better performance
         options.add_argument("--no-sandbox")
@@ -293,8 +275,6 @@ console.log('='.repeat(50));
         Setup undetected Chrome WebDriver with auto-downloaded ChromeDriver
         """
         try:
-            logger.info("Setting up undetected ChromeDriver...")
-            
             # Start local proxy server if authenticated proxy is configured
             if self.proxy_host and self.proxy_username and self.proxy_password:
                 if not self.start_local_proxy_server():
@@ -304,14 +284,12 @@ console.log('='.repeat(50));
             # Get Chrome version for better compatibility
             chrome_version = self.get_chrome_version()
             if chrome_version:
-                logger.info(f"Detected Chrome version: {chrome_version}")
                 try:
                     major_version = int(chrome_version.split('.')[0])
                 except:
                     major_version = None
             else:
                 major_version = None
-                logger.warning("Could not detect Chrome version")
             
             # Try different versions systematically
             versions_to_try = []
@@ -327,22 +305,14 @@ console.log('='.repeat(50));
             seen = set()
             versions_to_try = [x for x in versions_to_try if not (x in seen or seen.add(x))]
             
-            logger.info(f"Will try ChromeDriver versions in order: {versions_to_try}")
-            
             # Try each version
             for idx, version in enumerate(versions_to_try, 1):
                 try:
-                    version_str = "auto-detect" if version is None else f"version {version}"
-                    logger.info(f"Method {idx}/{len(versions_to_try)}: Attempting {version_str}...")
-                    
                     options = self.create_chrome_options()
                     self.driver = uc.Chrome(options=options, version_main=version)
-                    
-                    logger.info(f"✅ Undetected ChromeDriver setup successful with {version_str}")
                     return True
                     
                 except Exception as e:
-                    logger.warning(f"Failed with {version_str}: {str(e)[:100]}")
                     continue
             
             # If we get here, all versions failed
@@ -356,15 +326,10 @@ console.log('='.repeat(50));
     def navigate_to_url(self, url):
         """Navigate to a specific URL"""
         try:
-            logger.info(f"Navigating to: {url}")
             self.driver.get(url)
             
             # Wait for page to load
             time.sleep(3)
-            
-            # Get page title
-            title = self.driver.title
-            logger.info(f"Page loaded successfully. Title: {title}")
             
             return True
             
@@ -377,9 +342,6 @@ console.log('='.repeat(50));
         try:
             title = self.driver.title
             current_url = self.driver.current_url
-            
-            logger.info(f"Current page title: {title}")
-            logger.info(f"Current URL: {current_url}")
             
             return {
                 'title': title,
@@ -420,8 +382,6 @@ console.log('='.repeat(50));
             from selenium.webdriver.support.ui import WebDriverWait
             from selenium.webdriver.support import expected_conditions as EC
             
-            logger.info("Checking for Cloudflare captcha...")
-            
             # Wait a moment for page to fully load
             time.sleep(2)
             
@@ -432,7 +392,6 @@ console.log('='.repeat(50));
             
             for attempt in range(max_attempts):
                 if attempt > 0:
-                    logger.debug(f"Attempt {attempt + 1}/{max_attempts} to find main-wrapper...")
                     time.sleep(check_interval)
                 
                 try:
@@ -447,45 +406,20 @@ console.log('='.repeat(50));
                             try:
                                 if wrapper.is_displayed():
                                     main_wrapper = wrapper
-                                    logger.info(f"✅ Found main-wrapper element (attempt {attempt + 1})")
                                     break
                             except Exception as e:
-                                logger.debug(f"Error checking wrapper visibility: {str(e)}")
                                 continue
                         
                         if main_wrapper:
                             break
                 except Exception as e:
-                    logger.debug(f"Error finding main-wrapper: {str(e)}")
                     continue
             
             if not main_wrapper:
-                # Also check for hidden input as indicator that captcha exists
-                try:
-                    hidden_inputs = self.driver.find_elements(By.CSS_SELECTOR, "input[name='cf-turnstile-response']")
-                    if hidden_inputs:
-                        logger.info("⚠️  Cloudflare captcha hidden input found but main-wrapper not found")
-                        logger.info("Attempting to find main-wrapper via JavaScript...")
-                        
-                        # Try JavaScript to find main-wrapper
-                        script = """
-                        const mainWrapper = document.querySelector('div.main-wrapper[role="main"]') || 
-                                          document.querySelector('div.main-wrapper');
-                        return mainWrapper ? true : false;
-                        """
-                        result = self.driver.execute_script(script)
-                        if result:
-                            logger.info("main-wrapper exists but may not be directly accessible")
-                except:
-                    pass
-                
-                logger.info("No Cloudflare captcha main-wrapper found - proceeding normally")
                 return False
             
             # Click the main-wrapper element
             try:
-                logger.info("Clicking Cloudflare captcha main-wrapper element...")
-                
                 # Scroll into view
                 self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", main_wrapper)
                 time.sleep(1)
@@ -496,35 +430,25 @@ console.log('='.repeat(50));
                 # Method 1: Regular click
                 try:
                     main_wrapper.click()
-                    logger.info("✅ Clicked main-wrapper using regular click")
                     clicked = True
                 except Exception as click_error:
-                    logger.debug(f"Regular click failed: {str(click_error)}")
-                    
                     # Method 2: JavaScript click
                     try:
                         self.driver.execute_script("arguments[0].click();", main_wrapper)
-                        logger.info("✅ Clicked main-wrapper using JavaScript")
                         clicked = True
                     except Exception as js_error:
-                        logger.debug(f"JavaScript click failed: {str(js_error)}")
-                        
                         # Method 3: ActionChains click
                         try:
                             from selenium.webdriver.common.action_chains import ActionChains
                             actions = ActionChains(self.driver)
                             actions.move_to_element(main_wrapper).click().perform()
-                            logger.info("✅ Clicked main-wrapper using ActionChains")
                             clicked = True
                         except Exception as ac_error:
-                            logger.debug(f"ActionChains click failed: {str(ac_error)}")
-                            
-                            # Method 4: Click using coordinates (relative to element center)
+                            # Method 4: Click using coordinates
                             try:
                                 from selenium.webdriver.common.action_chains import ActionChains
                                 actions = ActionChains(self.driver)
                                 actions.move_to_element_with_offset(main_wrapper, 0, 0).click().perform()
-                                logger.info("✅ Clicked main-wrapper using coordinates")
                                 clicked = True
                             except Exception as coord_error:
                                 # Method 5: Try JavaScript click with MouseEvent
@@ -543,43 +467,21 @@ console.log('='.repeat(50));
                                         });
                                         element.dispatchEvent(clickEvent);
                                     """, main_wrapper)
-                                    logger.info("✅ Clicked main-wrapper using JavaScript MouseEvent")
                                     clicked = True
                                 except Exception as js_coord_error:
-                                    logger.warning(f"All click methods failed: {str(js_coord_error)}")
+                                    pass
                 
                 if clicked:
                     # Wait for captcha to complete
-                    logger.info("Waiting for Cloudflare captcha to complete...")
                     time.sleep(5)
-                    
-                    # Check if captcha is still present
-                    try:
-                        # Check if hidden input still exists (it should remain but captcha should be solved)
-                        hidden_inputs = self.driver.find_elements(By.CSS_SELECTOR, "input[name='cf-turnstile-response']")
-                        if hidden_inputs:
-                            # Check if the response value is filled (indicates captcha solved)
-                            for hidden_input in hidden_inputs:
-                                response_value = hidden_input.get_attribute('value') or ''
-                                if response_value:
-                                    logger.info("✅ Cloudflare captcha completed successfully (response value present)")
-                                    return True
-                        
-                        logger.info("✅ Cloudflare captcha interaction completed")
-                        return True
-                    except:
-                        logger.info("✅ Cloudflare captcha interaction completed")
-                        return True
+                    return True
                 else:
-                    logger.warning("Failed to click main-wrapper element")
                     return False
                     
             except Exception as e:
-                logger.warning(f"Error clicking main-wrapper: {str(e)}")
                 return False
                 
         except Exception as e:
-            logger.warning(f"Error handling Cloudflare captcha: {str(e)}")
             try:
                 self.driver.switch_to.default_content()
             except:
@@ -598,71 +500,48 @@ console.log('='.repeat(50));
         """
         try:
             if not self.driver:
-                logger.warning("Driver not available for cache clearing")
                 return False
-            
-            logger.info("Clearing browser cache and storage...")
             
             # Clear cookies
             try:
                 self.driver.delete_all_cookies()
-                logger.info("✅ Cookies cleared")
             except Exception as e:
-                logger.warning(f"Failed to clear cookies: {str(e)}")
+                pass
             
             # Clear local storage, session storage, and cache via JavaScript
             try:
-                # Execute JavaScript to clear all storage
                 self.driver.execute_script("""
-                    // Clear localStorage
                     try {
                         localStorage.clear();
-                        console.log('localStorage cleared');
-                    } catch(e) {
-                        console.log('Error clearing localStorage:', e);
-                    }
+                    } catch(e) {}
                     
-                    // Clear sessionStorage
                     try {
                         sessionStorage.clear();
-                        console.log('sessionStorage cleared');
-                    } catch(e) {
-                        console.log('Error clearing sessionStorage:', e);
-                    }
+                    } catch(e) {}
                     
-                    // Clear cache storage (if available)
                     try {
                         if ('caches' in window) {
                             caches.keys().then(function(names) {
                                 for (let name of names) {
                                     caches.delete(name);
                                 }
-                                console.log('Cache storage cleared');
                             });
                         }
-                    } catch(e) {
-                        console.log('Error clearing cache storage:', e);
-                    }
+                    } catch(e) {}
                     
-                    // Clear IndexedDB (if available)
                     try {
                         if ('indexedDB' in window) {
                             indexedDB.databases().then(databases => {
                                 databases.forEach(db => {
                                     indexedDB.deleteDatabase(db.name);
                                 });
-                                console.log('IndexedDB cleared');
                             });
                         }
-                    } catch(e) {
-                        console.log('Error clearing IndexedDB:', e);
-                    }
+                    } catch(e) {}
                 """)
-                logger.info("✅ Browser storage cleared (localStorage, sessionStorage, cache)")
             except Exception as e:
-                logger.warning(f"Failed to clear browser storage via JavaScript: {str(e)}")
+                pass
             
-            logger.info("✅ Browser cache clearing completed")
             return True
             
         except Exception as e:
@@ -674,7 +553,6 @@ console.log('='.repeat(50));
         try:
             if self.driver:
                 self.driver.quit()
-                logger.info("WebDriver closed successfully")
         except Exception as e:
             logger.error(f"Error closing WebDriver: {str(e)}")
         finally:
@@ -720,7 +598,6 @@ def fetch_single_passport_application(props=None):
                 logger.error("error_code is required when application_processing_method is 'failed'")
                 return None
             
-            logger.info(f"Fetching failed passport application from API: {api_endpoint} with error_code: {error_code}")
             
             # Make POST request to the API with error_code parameter
             response = requests.post(api_endpoint, json={'error_code': error_code}, timeout=10)
@@ -733,32 +610,20 @@ def fetch_single_passport_application(props=None):
                 logger.error("API_ENDPOINT not found in .env file")
                 return None
             
-            logger.info(f"Fetching passport application from API: {api_endpoint}")
             
             # Make GET request to the API with timeout
             response = requests.get(api_endpoint, timeout=10)  # 10 second timeout
             response.raise_for_status()
-        
-        # Log response status and content type
-        logger.info(f"API response status: {response.status_code}, Content-Type: {response.headers.get('content-type')}")
         
         # Parse JSON response
         try:
             api_data = response.json()
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse API response as JSON: {str(e)}")
-            logger.error(f"Response text: {response.text[:500]}")  # Log first 500 chars
             return None
-        
-        # Log the actual response for debugging
-        logger.info(f"API response type: {type(api_data)}")
-        if isinstance(api_data, dict):
-            logger.info(f"API response keys: {list(api_data.keys())}")
         
         # Check if API returned an error status (no applications available)
         if isinstance(api_data, dict) and api_data.get('status') == 'error':
-            message = api_data.get('message', 'Unknown error')
-            logger.info(f"API returned error status: {message}")
             return None
         
         # Check if response has 'data' key
@@ -771,7 +636,6 @@ def fetch_single_passport_application(props=None):
         
         # Handle if 'data' is None or null
         if api_data['data'] is None:
-            logger.info("API returned null data - no passport applications available")
             return None
         
         # Check if 'data' is a list
@@ -781,21 +645,16 @@ def fetch_single_passport_application(props=None):
             
             # If data is an object with an 'id', try to process it as a single application
             if isinstance(api_data['data'], dict) and 'id' in api_data['data']:
-                logger.info("API returned single application object instead of array, wrapping it in array")
                 api_data['data'] = [api_data['data']]
             else:
                 return None
         
         # Check if there's any data
         if len(api_data['data']) == 0:
-            logger.info("No passport applications available in API (empty array)")
             return None
         
         # Get the first application
         application = api_data['data'][0]
-        
-        # Log what we're processing
-        logger.info(f"Processing application with ID: {application.get('id', 'Unknown')}")
         
         try:
             # Extract and parse the nested 'data' field if it's a JSON string
@@ -813,9 +672,6 @@ def fetch_single_passport_application(props=None):
                     parsed_data = nested_data
                 
                 application_id = application.get('id')
-                applicant_name = f"{parsed_data.get('first_name', 'Unknown')} {parsed_data.get('last_name', 'Unknown')}"
-                
-                logger.info(f"Fetched application ID: {application_id}, Applicant: {applicant_name}")
                 
                 # Return the application with parsed data and top-level fields preserved
                 return {
@@ -826,7 +682,6 @@ def fetch_single_passport_application(props=None):
                     'ai_photo_url': application.get('ai_photo_url')
                 }
             else:
-                logger.warning("Application has no 'data' field")
                 return None
         except Exception as e:
             logger.error(f"Failed to process application data: {str(e)}")
@@ -898,13 +753,10 @@ def update_application_status(application_id, renewal_status, renewal_error=None
         if renewal_application_id:
             request_body["renewal_application_id"] = str(renewal_application_id)
         
-        logger.info(f"Updating application status for ID {application_id}: {request_body}")
-        
         # Make POST request to update status
         response = requests.post(update_endpoint, json=request_body, timeout=10)
         response.raise_for_status()
         
-        logger.info(f"✅ Successfully updated status for application {application_id}")
         return True
         
     except requests.exceptions.RequestException as e:
@@ -1001,7 +853,6 @@ def process_single_application(driver, passport_data, app_index, total_apps):
             # Capture renewal_application_id from Step 15 if present
             if step_num == 15 and isinstance(step_result, dict) and 'renewal_application_id' in step_result:
                 renewal_application_id = step_result['renewal_application_id']
-                logger.info(f"Captured renewal application ID: {renewal_application_id}")
             
             if not success:
                 print(f"❌ Step {step_num} failed: {message}")
@@ -1010,7 +861,6 @@ def process_single_application(driver, passport_data, app_index, total_apps):
                     "code": code,
                     "message": message
                 }
-                logger.error(f"Application {application_id} failed at Step {step_num}: {code} - {message}")
                 break  # Stop processing further steps
             else:
                 print(f"✅ Step {step_num} completed successfully")
@@ -1060,7 +910,6 @@ def process_single_application(driver, passport_data, app_index, total_apps):
                 print(f"Renewal Application ID: {renewal_application_id}")
                 update_application_status(application_id, "5", renewal_application_id=renewal_application_id)
             else:
-                logger.warning("Renewal application ID not captured from Step 15")
                 update_application_status(application_id, "5")
             
             return {
@@ -1301,7 +1150,6 @@ def main():
         print(f"Failed: {total_failed} ❌")
         print("="*70)
         print("\n⚠️  Browser will remain open. Close manually if needed.")
-        logger.info(f"Automation session ended. Processed: {total_processed}, Success: {total_successful}, Failed: {total_failed}")
 
 
 if __name__ == "__main__":
