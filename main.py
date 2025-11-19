@@ -275,14 +275,13 @@ console.log('='.repeat(50));
         # Additional options for better performance
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--window-size=640,480")
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_argument("--disable-logging")
         options.add_argument("--log-level=3")
         options.add_argument("--silent")
         options.add_argument("--disable-infobars")
         options.add_argument("--disable-notifications")
-        options.add_argument("--start-maximized")
         
         return options
     
@@ -1018,6 +1017,14 @@ def process_application_in_thread(passport_data, app_number, props, shared_proxy
             print(f"✅ [{thread_id}] Cloudflare captcha was found and clicked")
         else:
             print(f"ℹ️  [{thread_id}] No Cloudflare captcha found - proceeding normally")
+        
+        # Set browser zoom to 50%
+        try:
+            print(f"\n🔍 [{thread_id}] Setting browser zoom to 50%...")
+            automation.driver.execute_script("document.body.style.zoom='50%'")
+            print(f"✅ [{thread_id}] Browser zoom set to 50%")
+        except Exception as e:
+            print(f"⚠️  [{thread_id}] Failed to set zoom: {str(e)}")
         
         # Wait 10 seconds after initial navigation
         print(f"\n⏳ [{thread_id}] Waiting 10 seconds after initial navigation...")
