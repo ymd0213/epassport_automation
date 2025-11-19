@@ -42,12 +42,14 @@ logger = logging.getLogger(__name__)
 
 
 class UndetectedWebAutomation:
-    def __init__(self, headless=False):
+    def __init__(self, headless=False, use_shared_proxy=True, shared_proxy_port=8888):
         """
         Initialize the UndetectedWebAutomation class
         
         Args:
             headless (bool): Run browser in headless mode
+            use_shared_proxy (bool): Use shared proxy server (don't create own)
+            shared_proxy_port (int): Port of the shared proxy server
         """
         self.driver = None
         self.headless = headless
@@ -58,6 +60,8 @@ class UndetectedWebAutomation:
         self.proxy_password = None
         self.proxy_extension_path = None
         self.proxy_server = None
+        self.use_shared_proxy = use_shared_proxy
+        self.shared_proxy_port = shared_proxy_port
         self.load_proxy_config()
     
     def load_proxy_config(self):
@@ -110,16 +114,22 @@ class UndetectedWebAutomation:
             self.proxy_host = None
     
     def start_local_proxy_server(self):
-        """Start local proxy server for authentication"""
+        """Start local proxy server for authentication (only if not using shared proxy)"""
         try:
+            # If using shared proxy, skip creating our own server
+            if self.use_shared_proxy:
+                return True
+            
             from proxy_server import ProxyServer
             
-            self.proxy_server = ProxyServer(local_host='127.0.0.1', local_port=8888)
+            print(f"🔌 Starting local proxy server on port {self.shared_proxy_port}...")
+            self.proxy_server = ProxyServer(local_host='127.0.0.1', local_port=self.shared_proxy_port)
             self.proxy_server.start()
             
             # Wait a moment for server to start
             time.sleep(1)
             
+            print(f"✅ Local proxy server started on port {self.shared_proxy_port}")
             return True
             
         except Exception as e:
@@ -127,7 +137,11 @@ class UndetectedWebAutomation:
             return False
     
     def stop_local_proxy_server(self):
-        """Stop local proxy server"""
+        """Stop local proxy server (only if not using shared proxy)"""
+        # If using shared proxy, don't stop it (main thread will handle that)
+        if self.use_shared_proxy:
+            return
+        
         if self.proxy_server:
             try:
                 self.proxy_server.stop()
@@ -251,7 +265,8 @@ console.log('='.repeat(50));
         if self.proxy_host and self.proxy_port:
             if self.proxy_username and self.proxy_password:
                 # Authenticated proxy - use local proxy server (no auth popup)
-                options.add_argument("--proxy-server=http://127.0.0.1:8888")
+                # Use the shared proxy port
+                options.add_argument(f"--proxy-server=http://127.0.0.1:{self.shared_proxy_port}")
             else:
                 # Non-authenticated proxy - direct connection
                 proxy_server = f"http://{self.proxy_host}:{self.proxy_port}"
@@ -952,7 +967,7 @@ def process_single_application(driver, passport_data, app_index, total_apps):
         }
 
 
-def process_application_in_thread(passport_data, app_number, props):
+def process_application_in_thread(passport_data, app_number, props, shared_proxy_port=8888):
     """
     Process a single application in a separate thread
     
@@ -960,12 +975,13 @@ def process_application_in_thread(passport_data, app_number, props):
         passport_data: Dictionary containing passport application data
         app_number: Application number for display purposes
         props: Properties for the application (method, error_code)
+        shared_proxy_port: Port of the shared proxy server
     """
     thread_id = threading.current_thread().name
     print(f"\n🧵 [{thread_id}] Thread started for application #{app_number}")
     
-    # Create automation instance for this thread
-    automation = UndetectedWebAutomation(headless=False)
+    # Create automation instance for this thread (using shared proxy)
+    automation = UndetectedWebAutomation(headless=False, use_shared_proxy=True, shared_proxy_port=shared_proxy_port)
     
     try:
         # Target URL
@@ -1072,21 +1088,73 @@ def main():
     print("=" * 70)
     print("The system will poll the API every 20 seconds for new applications.")
     print("Each application will be processed in a separate thread.")
+    print("Maximum concurrent threads: 5")
     print("Press Ctrl+C to stop the automation.\n")
     
     # Track statistics
     total_processed = 0
     active_threads = []
+    shared_proxy_server = None
+    shared_proxy_port = 8888
+    MAX_THREADS = 5  # Maximum number of concurrent threads
+    
+    # Start shared proxy server once (if needed)
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+        
+        # Check if proxy with authentication is configured
+        proxy_url = os.getenv('PROXY_URL')
+        proxy_host = os.getenv('PROXY_HOST')
+        proxy_username = os.getenv('PROXY_USERNAME')
+        proxy_password = os.getenv('PROXY_PASSWORD')
+        
+        needs_proxy = False
+        if proxy_url:
+            from urllib.parse import urlparse
+            parsed = urlparse(proxy_url)
+            if parsed.username and parsed.password:
+                needs_proxy = True
+        elif proxy_host and proxy_username and proxy_password:
+            needs_proxy = True
+        
+        if needs_proxy:
+            print("\n🔌 Starting shared proxy server...")
+            from proxy_server import ProxyServer
+            shared_proxy_server = ProxyServer(local_host='127.0.0.1', local_port=shared_proxy_port)
+            shared_proxy_server.start()
+            time.sleep(1)
+            print(f"✅ Shared proxy server started on port {shared_proxy_port}")
+            print("   All threads will use this single proxy server.\n")
+        else:
+            print("\nℹ️  No authenticated proxy configured - threads will connect directly.\n")
+    except Exception as e:
+        logger.error(f"Failed to start shared proxy server: {str(e)}")
+        print(f"⚠️  Warning: Could not start shared proxy server: {str(e)}")
+        print("   Continuing without proxy...\n")
     
     try:
         # Main polling loop
         while True:
             try:
+                # Clean up finished threads first
+                active_threads = [t for t in active_threads if t.is_alive()]
+                active_count = len(active_threads)
+                
                 print("\n" + ">"*70)
-                print(f"📡 Polling API for new applications...")
+                print(f"📡 Checking thread status...")
+                print(f"📊 Active threads: {active_count}/{MAX_THREADS}")
                 print(">"*70)
                 
-                # Fetch single application from API
+                # Check if we've reached the maximum thread limit
+                if active_count >= MAX_THREADS:
+                    print(f"⏸️  Maximum threads ({MAX_THREADS}) reached. Waiting for a thread to complete...")
+                    print("⏳ Waiting 20 seconds before next check...")
+                    time.sleep(20)
+                    continue
+                
+                # We have available slots - fetch new application
+                print(f"✅ Thread slot available ({active_count}/{MAX_THREADS}). Fetching new application...")
                 passport_data = fetch_single_passport_application(props)
                 
                 if not passport_data:
@@ -1104,7 +1172,7 @@ def main():
                 # Create and start the thread
                 thread = threading.Thread(
                     target=process_application_in_thread,
-                    args=(passport_data, total_processed, props),
+                    args=(passport_data, total_processed, props, shared_proxy_port),
                     name=thread_name,
                     daemon=True  # Daemon thread will exit when main program exits
                 )
@@ -1112,10 +1180,7 @@ def main():
                 active_threads.append(thread)
                 
                 print(f"✅ Thread '{thread_name}' started for application #{total_processed}")
-                
-                # Clean up finished threads
-                active_threads = [t for t in active_threads if t.is_alive()]
-                print(f"📊 Active threads: {len(active_threads)}")
+                print(f"📊 Active threads: {len(active_threads)}/{MAX_THREADS}")
                 
                 # Wait 20 seconds before polling again
                 print("⏳ Waiting 20 seconds before next API poll...")
@@ -1147,6 +1212,15 @@ def main():
                 if thread.is_alive():
                     print(f"⏳ Waiting for thread '{thread.name}' to complete...")
                     thread.join(timeout=300)  # Wait up to 5 minutes per thread
+        
+        # Stop shared proxy server
+        if shared_proxy_server:
+            try:
+                print("\n🔌 Stopping shared proxy server...")
+                shared_proxy_server.stop()
+                print("✅ Shared proxy server stopped")
+            except Exception as e:
+                logger.error(f"Error stopping shared proxy server: {str(e)}")
         
         # Print final summary
         print("\n" + "="*70)
