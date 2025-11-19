@@ -12,10 +12,6 @@ import os
 import json
 import requests
 import argparse
-import uuid
-import base64
-import zipfile
-import tempfile
 import threading
 from urllib.parse import urlparse
 from dotenv import load_dotenv
@@ -58,7 +54,6 @@ class UndetectedWebAutomation:
         self.proxy_port = None
         self.proxy_username = None
         self.proxy_password = None
-        self.proxy_extension_path = None
         self.proxy_server = None
         self.use_shared_proxy = use_shared_proxy
         self.shared_proxy_port = shared_proxy_port
@@ -148,98 +143,6 @@ class UndetectedWebAutomation:
                 self.proxy_server = None
             except Exception as e:
                 pass
-    
-    def create_proxy_extension(self):
-        """
-        Create a Chrome extension for proxy authentication
-        Returns the path to the extension ZIP file
-        """
-        try:
-            if not self.proxy_username or not self.proxy_password:
-                return None
-            
-            # Create a temporary directory for the extension files
-            extension_dir = tempfile.mkdtemp(prefix='proxy_ext_')
-            
-            # Create manifest.json (using manifest v2 for compatibility)
-            manifest_json = {
-                "version": "1.0.0",
-                "manifest_version": 2,
-                "name": "Chrome Proxy Auth",
-                "permissions": [
-                    "webRequest",
-                    "webRequestBlocking",
-                    "<all_urls>",
-                    "proxy",
-                    "tabs",
-                    "storage"
-                ],
-                "background": {
-                    "scripts": ["background.js"],
-                    "persistent": True
-                },
-                "minimum_chrome_version": "22.0.0"
-            }
-            
-            # Create background.js with proxy authentication
-            # Escape special characters in credentials
-            username = self.proxy_username.replace('\\', '\\\\').replace('"', '\\"')
-            password = self.proxy_password.replace('\\', '\\\\').replace('"', '\\"')
-            
-            background_js = f"""
-// Proxy authentication extension
-console.log('='.repeat(50));
-console.log('Proxy Auth Extension Starting...');
-console.log('Target: {self.proxy_host}:{self.proxy_port}');
-console.log('Username: {username}');
-console.log('='.repeat(50));
-
-// Authentication credentials
-var credentials = {{
-    username: "{username}",
-    password: "{password}"
-}};
-
-// Handle authentication requests
-function handleAuthRequest(details) {{
-    console.log('🔐 Authentication requested!');
-    console.log('   URL:', details.url);
-    console.log('   Challenger:', details.challenger);
-    console.log('   isProxy:', details.isProxy);
-    console.log('   Providing credentials...');
-    
-    return {{
-        authCredentials: credentials
-    }};
-}}
-
-// Register the authentication handler
-chrome.webRequest.onAuthRequired.addListener(
-    handleAuthRequest,
-    {{urls: ["<all_urls>"]}},
-    ['blocking']
-);
-
-console.log('✅ Proxy authentication handler registered');
-console.log('   Listening for auth requests on all URLs');
-console.log('='.repeat(50));
-"""
-            
-            # Write manifest.json
-            manifest_path = os.path.join(extension_dir, 'manifest.json')
-            with open(manifest_path, 'w', encoding='utf-8') as f:
-                json.dump(manifest_json, f, indent=2)
-            
-            # Write background.js
-            background_path = os.path.join(extension_dir, 'background.js')
-            with open(background_path, 'w', encoding='utf-8') as f:
-                f.write(background_js)
-            
-            return extension_dir
-            
-        except Exception as e:
-            logger.error(f"Error creating proxy extension: {str(e)}")
-            return None
     
     def get_chrome_version(self):
         """Get Chrome browser version"""
@@ -367,21 +270,6 @@ console.log('='.repeat(50));
             logger.error(f"Failed to get page info: {str(e)}")
             return None
     
-    def wait_for_element(self, locator, timeout=10):
-        """Wait for an element to be present"""
-        try:
-            from selenium.webdriver.common.by import By
-            from selenium.webdriver.support.ui import WebDriverWait
-            from selenium.webdriver.support import expected_conditions as EC
-            
-            wait = WebDriverWait(self.driver, timeout)
-            element = wait.until(EC.presence_of_element_located(locator))
-            return element
-            
-        except Exception as e:
-            logger.error(f"Element not found: {str(e)}")
-            return None
-    
     def handle_cloudflare_captcha(self, timeout=30):
         """
         Handle Cloudflare v2 captcha by clicking the checkbox if present
@@ -501,66 +389,6 @@ console.log('='.repeat(50));
                 self.driver.switch_to.default_content()
             except:
                 pass
-            return False
-    
-    def clear_browser_cache(self):
-        """
-        Clear browser cache, cookies, and storage after each application
-        
-        This includes:
-        - Cookies
-        - Local storage
-        - Session storage
-        - Cache storage
-        """
-        try:
-            if not self.driver:
-                return False
-            
-            # Clear cookies
-            try:
-                self.driver.delete_all_cookies()
-            except Exception as e:
-                pass
-            
-            # Clear local storage, session storage, and cache via JavaScript
-            try:
-                self.driver.execute_script("""
-                    try {
-                        localStorage.clear();
-                    } catch(e) {}
-                    
-                    try {
-                        sessionStorage.clear();
-                    } catch(e) {}
-                    
-                    try {
-                        if ('caches' in window) {
-                            caches.keys().then(function(names) {
-                                for (let name of names) {
-                                    caches.delete(name);
-                                }
-                            });
-                        }
-                    } catch(e) {}
-                    
-                    try {
-                        if ('indexedDB' in window) {
-                            indexedDB.databases().then(databases => {
-                                databases.forEach(db => {
-                                    indexedDB.deleteDatabase(db.name);
-                                });
-                            });
-                        }
-                    } catch(e) {}
-                """)
-            except Exception as e:
-                pass
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error clearing browser cache: {str(e)}")
             return False
     
     def close_driver(self):
