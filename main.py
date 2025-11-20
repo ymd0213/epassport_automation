@@ -12,7 +12,7 @@ import os
 import json
 import requests
 import argparse
-import threading
+import multiprocessing
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 
@@ -789,9 +789,9 @@ def process_single_application(driver, passport_data, app_index, total_apps):
         }
 
 
-def process_application_in_thread(passport_data, app_number, props, shared_proxy_port=8888):
+def process_application_in_process(passport_data, app_number, props, shared_proxy_port=8888):
     """
-    Process a single application in a separate thread
+    Process a single application in a separate process
     
     Args:
         passport_data: Dictionary containing passport application data
@@ -799,10 +799,10 @@ def process_application_in_thread(passport_data, app_number, props, shared_proxy
         props: Properties for the application (method, error_code)
         shared_proxy_port: Port of the shared proxy server
     """
-    thread_id = threading.current_thread().name
-    print(f"\n🧵 [{thread_id}] Thread started for application #{app_number}")
+    process_id = multiprocessing.current_process().name
+    print(f"\n🚀 [{process_id}] Process started for application #{app_number}")
     
-    # Create automation instance for this thread (using shared proxy)
+    # Create automation instance for this process (using shared proxy)
     automation = UndetectedWebAutomation(headless=False, use_shared_proxy=True, shared_proxy_port=shared_proxy_port)
     
     try:
@@ -810,43 +810,43 @@ def process_application_in_thread(passport_data, app_number, props, shared_proxy
         target_url = "https://opr.travel.state.gov/"
         
         # Setup driver
-        print(f"🧵 [{thread_id}] Setting up browser...")
+        print(f"🚀 [{process_id}] Setting up browser...")
         if not automation.setup_driver():
-            print(f"❌ [{thread_id}] Failed to setup browser")
+            print(f"❌ [{process_id}] Failed to setup browser")
             return
         
-        print(f"✅ [{thread_id}] Browser setup successful!")
+        print(f"✅ [{process_id}] Browser setup successful!")
         time.sleep(1)
         
         # Navigate to the URL
-        print(f"🧵 [{thread_id}] Navigating to {target_url}...")
+        print(f"🚀 [{process_id}] Navigating to {target_url}...")
         if not automation.navigate_to_url(target_url):
-            print(f"❌ [{thread_id}] Failed to navigate to {target_url}")
+            print(f"❌ [{process_id}] Failed to navigate to {target_url}")
             return
             
-        print(f"✅ [{thread_id}] Successfully navigated to {target_url}")
+        print(f"✅ [{process_id}] Successfully navigated to {target_url}")
         
         # Get page information
         page_info = automation.get_page_info()
         if page_info:
-            print(f"📄 [{thread_id}] Page Title: {page_info['title']}")
+            print(f"📄 [{process_id}] Page Title: {page_info['title']}")
         
         time.sleep(5)
         
         # Handle Cloudflare captcha if present
-        print(f"\n🔍 [{thread_id}] Checking for Cloudflare captcha...")
+        print(f"\n🔍 [{process_id}] Checking for Cloudflare captcha...")
         captcha_found = automation.handle_cloudflare_captcha()
         if captcha_found:
-            print(f"✅ [{thread_id}] Cloudflare captcha was found and clicked")
+            print(f"✅ [{process_id}] Cloudflare captcha was found and clicked")
         else:
-            print(f"ℹ️  [{thread_id}] No Cloudflare captcha found - proceeding normally")
+            print(f"ℹ️  [{process_id}] No Cloudflare captcha found - proceeding normally")
         
         # Wait 10 seconds after initial navigation
-        print(f"\n⏳ [{thread_id}] Waiting 10 seconds after initial navigation...")
+        print(f"\n⏳ [{process_id}] Waiting 10 seconds after initial navigation...")
         time.sleep(10)
         
         # Process the application
-        print(f"\n🚀 [{thread_id}] Starting application processing...")
+        print(f"\n🚀 [{process_id}] Starting application processing...")
         app_results = process_single_application(
             automation.driver, 
             passport_data, 
@@ -856,25 +856,25 @@ def process_application_in_thread(passport_data, app_number, props, shared_proxy
         
         # Print result
         if app_results.get('success', False):
-            print(f"\n✅ [{thread_id}] Application #{app_number} completed successfully!")
+            print(f"\n✅ [{process_id}] Application #{app_number} completed successfully!")
         else:
-            print(f"\n❌ [{thread_id}] Application #{app_number} failed")
+            print(f"\n❌ [{process_id}] Application #{app_number} failed")
         
     except Exception as e:
-        logger.error(f"[{thread_id}] Error in thread: {str(e)}")
-        print(f"❌ [{thread_id}] Error in thread: {str(e)}")
+        logger.error(f"[{process_id}] Error in process: {str(e)}")
+        print(f"❌ [{process_id}] Error in process: {str(e)}")
     
     finally:
         # Close the browser and cleanup
-        print(f"\n🧹 [{thread_id}] Closing browser and cleaning up...")
+        print(f"\n🧹 [{process_id}] Closing browser and cleaning up...")
         automation.close_driver()
-        print(f"✅ [{thread_id}] Thread completed and browser closed")
+        print(f"✅ [{process_id}] Process completed and browser closed")
 
 
 def main():
-    """Main function to poll API and create threads for each application"""
+    """Main function to poll API and create processes for each application"""
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Undetected ChromeDriver Web Automation with Threading')
+    parser = argparse.ArgumentParser(description='Undetected ChromeDriver Web Automation with Multiprocessing')
     parser.add_argument(
         '--method',
         type=str,
@@ -902,23 +902,23 @@ def main():
     if args.error_code:
         props['error_code'] = args.error_code
     
-    print("Undetected ChromeDriver Web Automation - Threading Mode")
+    print("Undetected ChromeDriver Web Automation - Multiprocessing Mode")
     print("=" * 70)
     print(f"Processing Method: {args.method}")
     if args.error_code:
         print(f"Error Code: {args.error_code}")
     print("=" * 70)
     print("The system will poll the API every 20 seconds for new applications.")
-    print("Each application will be processed in a separate thread.")
-    print("Maximum concurrent threads: 5")
+    print("Each application will be processed in a separate process.")
+    print("Maximum concurrent processes: 5")
     print("Press Ctrl+C to stop the automation.\n")
     
     # Track statistics
     total_processed = 0
-    active_threads = []
+    active_processes = []
     shared_proxy_server = None
     shared_proxy_port = 8888
-    MAX_THREADS = 5  # Maximum number of concurrent threads
+    MAX_PROCESSES = 5  # Maximum number of concurrent processes
     
     # Start shared proxy server once (if needed)
     try:
@@ -959,24 +959,24 @@ def main():
         # Main polling loop
         while True:
             try:
-                # Clean up finished threads first
-                active_threads = [t for t in active_threads if t.is_alive()]
-                active_count = len(active_threads)
+                # Clean up finished processes first
+                active_processes = [p for p in active_processes if p.is_alive()]
+                active_count = len(active_processes)
                 
                 print("\n" + ">"*70)
-                print(f"📡 Checking thread status...")
-                print(f"📊 Active threads: {active_count}/{MAX_THREADS}")
+                print(f"📡 Checking process status...")
+                print(f"📊 Active processes: {active_count}/{MAX_PROCESSES}")
                 print(">"*70)
                 
-                # Check if we've reached the maximum thread limit
-                if active_count >= MAX_THREADS:
-                    print(f"⏸️  Maximum threads ({MAX_THREADS}) reached. Waiting for a thread to complete...")
+                # Check if we've reached the maximum process limit
+                if active_count >= MAX_PROCESSES:
+                    print(f"⏸️  Maximum processes ({MAX_PROCESSES}) reached. Waiting for a process to complete...")
                     print("⏳ Waiting 20 seconds before next check...")
                     time.sleep(20)
                     continue
                 
                 # We have available slots - fetch new application
-                print(f"✅ Thread slot available ({active_count}/{MAX_THREADS}). Fetching new application...")
+                print(f"✅ Process slot available ({active_count}/{MAX_PROCESSES}). Fetching new application...")
                 passport_data = fetch_single_passport_application(props)
                 
                 if not passport_data:
@@ -997,24 +997,24 @@ def main():
                     time.sleep(20)
                     continue
                 
-                # Create a new thread
+                # Create a new process
                 total_processed += 1
-                thread_name = f"App-{total_processed}"
+                process_name = f"App-{total_processed}"
                 
-                print(f"\n✨ Creating thread '{thread_name}' for application {application_id}...")
+                print(f"\n✨ Creating process '{process_name}' for application {application_id}...")
                 
-                # Create and start the thread
-                thread = threading.Thread(
-                    target=process_application_in_thread,
+                # Create and start the process
+                process = multiprocessing.Process(
+                    target=process_application_in_process,
                     args=(passport_data, total_processed, props, shared_proxy_port),
-                    name=thread_name,
-                    daemon=True  # Daemon thread will exit when main program exits
+                    name=process_name,
+                    daemon=True  # Daemon process will exit when main program exits
                 )
-                thread.start()
-                active_threads.append(thread)
+                process.start()
+                active_processes.append(process)
                 
-                print(f"✅ Thread '{thread_name}' started for application #{total_processed}")
-                print(f"📊 Active threads: {len(active_threads)}/{MAX_THREADS}")
+                print(f"✅ Process '{process_name}' started for application #{total_processed}")
+                print(f"📊 Active processes: {len(active_processes)}/{MAX_PROCESSES}")
                 
                 # Wait 20 seconds before polling again
                 print("⏳ Waiting 20 seconds before next API poll...")
@@ -1037,15 +1037,15 @@ def main():
         print(f"❌ Critical error occurred: {str(e)}")
     
     finally:
-        # Wait for all active threads to complete
-        if active_threads:
+        # Wait for all active processes to complete
+        if active_processes:
             print("\n" + "="*70)
-            print(f"⏳ Waiting for {len(active_threads)} active thread(s) to complete...")
+            print(f"⏳ Waiting for {len(active_processes)} active process(es) to complete...")
             print("="*70)
-            for thread in active_threads:
-                if thread.is_alive():
-                    print(f"⏳ Waiting for thread '{thread.name}' to complete...")
-                    thread.join(timeout=300)  # Wait up to 5 minutes per thread
+            for process in active_processes:
+                if process.is_alive():
+                    print(f"⏳ Waiting for process '{process.name}' to complete...")
+                    process.join(timeout=300)  # Wait up to 5 minutes per process
         
         # Stop shared proxy server
         if shared_proxy_server:
@@ -1062,8 +1062,13 @@ def main():
         print("="*70)
         print(f"Total Applications Processed: {total_processed}")
         print("="*70)
-        print("\n✅ Automation stopped. All threads have been completed or terminated.")
+        print("\n✅ Automation stopped. All processes have been completed or terminated.")
 
 
 if __name__ == "__main__":
+    # Required for Windows multiprocessing support
+    multiprocessing.freeze_support()
+    # Set spawn method for better cross-platform compatibility
+    # 'spawn' creates a fresh Python interpreter process
+    multiprocessing.set_start_method('spawn', force=True)
     main()
