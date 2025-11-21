@@ -13,7 +13,6 @@ import json
 import requests
 import argparse
 import multiprocessing
-from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 from steps.step1_landing_page import Step1LandingPage
@@ -38,111 +37,15 @@ logger = logging.getLogger(__name__)
 
 
 class UndetectedWebAutomation:
-    def __init__(self, headless=False, use_shared_proxy=True, shared_proxy_port=8888):
+    def __init__(self, headless=False):
         """
         Initialize the UndetectedWebAutomation class
         
         Args:
             headless (bool): Run browser in headless mode
-            use_shared_proxy (bool): Use shared proxy server (don't create own)
-            shared_proxy_port (int): Port of the shared proxy server
         """
         self.driver = None
         self.headless = headless
-        self.proxy_url = None
-        self.proxy_host = None
-        self.proxy_port = None
-        self.proxy_username = None
-        self.proxy_password = None
-        self.proxy_server = None
-        self.use_shared_proxy = use_shared_proxy
-        self.shared_proxy_port = shared_proxy_port
-        self.load_proxy_config()
-    
-    def load_proxy_config(self):
-        """Load and parse proxy configuration from environment variables"""
-        try:
-            # Load environment variables
-            load_dotenv()
-            
-            # Method 1: Try to get proxy URL from single environment variable
-            self.proxy_url = os.getenv('PROXY_URL')
-            
-            if self.proxy_url:
-                # Parse the proxy URL
-                parsed = urlparse(self.proxy_url)
-                
-                self.proxy_host = parsed.hostname
-                self.proxy_port = parsed.port
-                self.proxy_username = parsed.username
-                self.proxy_password = parsed.password
-                
-                # Determine the scheme (http, https, socks5, etc.)
-                scheme = parsed.scheme if parsed.scheme else 'http'
-                
-            else:
-                # Method 2: Try to get proxy configuration from separate variables
-                self.proxy_host = os.getenv('PROXY_HOST')
-                self.proxy_port = os.getenv('PROXY_PORT')
-                self.proxy_username = os.getenv('PROXY_USERNAME')
-                self.proxy_password = os.getenv('PROXY_PASSWORD')
-                
-                if self.proxy_host and self.proxy_port:
-                    # Convert port to integer
-                    try:
-                        self.proxy_port = int(self.proxy_port)
-                    except ValueError:
-                        logger.error(f"Invalid PROXY_PORT value: {self.proxy_port}")
-                        self.proxy_host = None
-                        return
-                    
-                    # Build proxy_url for compatibility
-                    scheme = 'http'  # Default to http
-                    if self.proxy_username and self.proxy_password:
-                        self.proxy_url = f"{scheme}://{self.proxy_username}:{self.proxy_password}@{self.proxy_host}:{self.proxy_port}"
-                    else:
-                        self.proxy_url = f"{scheme}://{self.proxy_host}:{self.proxy_port}"
-                
-        except Exception as e:
-            logger.error(f"Error loading proxy configuration: {str(e)}")
-            self.proxy_url = None
-            self.proxy_host = None
-    
-    def start_local_proxy_server(self):
-        """Start local proxy server for authentication (only if not using shared proxy)"""
-        try:
-            # If using shared proxy, skip creating our own server
-            if self.use_shared_proxy:
-                return True
-            
-            from proxy_server import ProxyServer
-            
-            print(f"🔌 Starting local proxy server on port {self.shared_proxy_port}...")
-            self.proxy_server = ProxyServer(local_host='127.0.0.1', local_port=self.shared_proxy_port)
-            self.proxy_server.start()
-            
-            # Wait a moment for server to start
-            time.sleep(1)
-            
-            print(f"✅ Local proxy server started on port {self.shared_proxy_port}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to start local proxy server: {str(e)}")
-            return False
-    
-    def stop_local_proxy_server(self):
-        """Stop local proxy server (only if not using shared proxy)"""
-        # If using shared proxy, don't stop it (main thread will handle that)
-        if self.use_shared_proxy:
-            return
-        
-        if self.proxy_server:
-            try:
-                self.proxy_server.stop()
-                self.proxy_server = None
-            except Exception as e:
-                pass
     
     def get_chrome_version(self):
         """Get Chrome browser version"""
@@ -164,17 +67,6 @@ class UndetectedWebAutomation:
         if self.headless:
             options.add_argument("--headless")
         
-        # Add proxy configuration if available
-        if self.proxy_host and self.proxy_port:
-            if self.proxy_username and self.proxy_password:
-                # Authenticated proxy - use local proxy server (no auth popup)
-                # Use the shared proxy port
-                options.add_argument(f"--proxy-server=http://127.0.0.1:{self.shared_proxy_port}")
-            else:
-                # Non-authenticated proxy - direct connection
-                proxy_server = f"http://{self.proxy_host}:{self.proxy_port}"
-                options.add_argument(f"--proxy-server={proxy_server}")
-        
         # Additional options for better performance
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
@@ -193,12 +85,6 @@ class UndetectedWebAutomation:
         Setup undetected Chrome WebDriver with auto-downloaded ChromeDriver
         """
         try:
-            # Start local proxy server if authenticated proxy is configured
-            if self.proxy_host and self.proxy_username and self.proxy_password:
-                if not self.start_local_proxy_server():
-                    logger.error("Failed to start local proxy server")
-                    return False
-            
             # Get Chrome version for better compatibility
             chrome_version = self.get_chrome_version()
             if chrome_version:
@@ -400,9 +286,6 @@ class UndetectedWebAutomation:
             logger.error(f"Error closing WebDriver: {str(e)}")
         finally:
             self.driver = None
-            
-            # Stop local proxy server if running
-            self.stop_local_proxy_server()
     
 
 
@@ -789,7 +672,7 @@ def process_single_application(driver, passport_data, app_index, total_apps):
         }
 
 
-def process_application_in_process(passport_data, app_number, props, shared_proxy_port=8888):
+def process_application_in_process(passport_data, app_number, props):
     """
     Process a single application in a separate process
     
@@ -797,13 +680,12 @@ def process_application_in_process(passport_data, app_number, props, shared_prox
         passport_data: Dictionary containing passport application data
         app_number: Application number for display purposes
         props: Properties for the application (method, error_code)
-        shared_proxy_port: Port of the shared proxy server
     """
     process_id = multiprocessing.current_process().name
     print(f"\n🚀 [{process_id}] Process started for application #{app_number}")
     
-    # Create automation instance for this process (using shared proxy)
-    automation = UndetectedWebAutomation(headless=False, use_shared_proxy=True, shared_proxy_port=shared_proxy_port)
+    # Create automation instance for this process
+    automation = UndetectedWebAutomation(headless=False)
     
     try:
         # Target URL
@@ -916,44 +798,7 @@ def main():
     # Track statistics
     total_processed = 0
     active_processes = []
-    shared_proxy_server = None
-    shared_proxy_port = 8888
     MAX_PROCESSES = 5  # Maximum number of concurrent processes
-    
-    # Start shared proxy server once (if needed)
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-        
-        # Check if proxy with authentication is configured
-        proxy_url = os.getenv('PROXY_URL')
-        proxy_host = os.getenv('PROXY_HOST')
-        proxy_username = os.getenv('PROXY_USERNAME')
-        proxy_password = os.getenv('PROXY_PASSWORD')
-        
-        needs_proxy = False
-        if proxy_url:
-            from urllib.parse import urlparse
-            parsed = urlparse(proxy_url)
-            if parsed.username and parsed.password:
-                needs_proxy = True
-        elif proxy_host and proxy_username and proxy_password:
-            needs_proxy = True
-        
-        if needs_proxy:
-            print("\n🔌 Starting shared proxy server...")
-            from proxy_server import ProxyServer
-            shared_proxy_server = ProxyServer(local_host='127.0.0.1', local_port=shared_proxy_port)
-            shared_proxy_server.start()
-            time.sleep(1)
-            print(f"✅ Shared proxy server started on port {shared_proxy_port}")
-            print("   All threads will use this single proxy server.\n")
-        else:
-            print("\nℹ️  No authenticated proxy configured - threads will connect directly.\n")
-    except Exception as e:
-        logger.error(f"Failed to start shared proxy server: {str(e)}")
-        print(f"⚠️  Warning: Could not start shared proxy server: {str(e)}")
-        print("   Continuing without proxy...\n")
     
     try:
         # Main polling loop
@@ -1006,7 +851,7 @@ def main():
                 # Create and start the process
                 process = multiprocessing.Process(
                     target=process_application_in_process,
-                    args=(passport_data, total_processed, props, shared_proxy_port),
+                    args=(passport_data, total_processed, props),
                     name=process_name,
                     daemon=True  # Daemon process will exit when main program exits
                 )
@@ -1046,15 +891,6 @@ def main():
                 if process.is_alive():
                     print(f"⏳ Waiting for process '{process.name}' to complete...")
                     process.join(timeout=300)  # Wait up to 5 minutes per process
-        
-        # Stop shared proxy server
-        if shared_proxy_server:
-            try:
-                print("\n🔌 Stopping shared proxy server...")
-                shared_proxy_server.stop()
-                print("✅ Shared proxy server stopped")
-            except Exception as e:
-                logger.error(f"Error stopping shared proxy server: {str(e)}")
         
         # Print final summary
         print("\n" + "="*70)
