@@ -211,7 +211,7 @@ class UndetectedWebAutomation:
             try:
                 # Scroll into view
                 self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", main_wrapper)
-                time.sleep(1)
+                time.sleep(5)
                 
                 # Try multiple click methods
                 clicked = False
