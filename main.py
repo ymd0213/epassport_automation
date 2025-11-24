@@ -168,109 +168,86 @@ class UndetectedWebAutomation:
         """
         try:
             from selenium.webdriver.common.by import By
-            from selenium.webdriver.support.ui import WebDriverWait
-            from selenium.webdriver.support import expected_conditions as EC
             
             # Wait a moment for page to fully load
             time.sleep(2)
             
-            # Look for main-wrapper element that contains the Cloudflare captcha
-            main_wrapper = None
-            max_attempts = 6  # Check every 2 seconds for up to 12 seconds
-            check_interval = 2
+            # Retry logic for finding and clicking captcha
+            max_attempts = 6  # Try up to 6 times
+            check_interval = 2  # Wait 2 seconds between attempts
             
             for attempt in range(max_attempts):
                 if attempt > 0:
+                    logger.info(f"Captcha click attempt {attempt + 1}/{max_attempts}")
                     time.sleep(check_interval)
                 
                 try:
                     # Try to find main-wrapper element
                     main_wrappers = self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper[role='main']")
                     if not main_wrappers:
-                        # Also try without role='main' attribute
                         main_wrappers = self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper")
                     
-                    if main_wrappers:
-                        for wrapper in main_wrappers:
+                    if not main_wrappers:
+                        continue
+                    
+                    # Find visible wrapper
+                    main_wrapper = None
+                    for wrapper in main_wrappers:
+                        try:
+                            if wrapper.is_displayed():
+                                main_wrapper = wrapper
+                                break
+                        except:
+                            continue
+                    
+                    if not main_wrapper:
+                        continue
+                    
+                    # Try to click the captcha
+                    try:
+                        # Scroll into view
+                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", main_wrapper)
+                        time.sleep(1)
+                        
+                        # Try JavaScript click
+                        self.driver.execute_script("arguments[0].click();", main_wrapper)
+                        logger.info("Successfully clicked Cloudflare captcha")
+                        
+                        # Wait for captcha to process
+                        time.sleep(5)
+                        
+                        # Verify if captcha is gone (successful click)
+                        verify_wrappers = self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper")
+                        captcha_still_present = False
+                        for wrapper in verify_wrappers:
                             try:
                                 if wrapper.is_displayed():
-                                    main_wrapper = wrapper
+                                    captcha_still_present = True
                                     break
-                            except Exception as e:
+                            except:
                                 continue
                         
-                        if main_wrapper:
-                            break
+                        if not captcha_still_present:
+                            logger.info("Captcha successfully resolved")
+                            return True
+                        else:
+                            logger.info("Captcha still present, retrying...")
+                            continue
+                            
+                    except Exception as click_error:
+                        logger.warning(f"Click attempt failed: {str(click_error)}")
+                        continue
+                        
                 except Exception as e:
+                    logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
                     continue
             
-            if not main_wrapper:
-                return False
-            
-            # Click the main-wrapper element
-            try:
-                # Scroll into view
-                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", main_wrapper)
-                time.sleep(5)
-                
-                # Try multiple click methods
-                clicked = False
-                
-                # Method 1: Regular click
-                try:
-                    main_wrapper.click()
-                    clicked = True
-                except Exception as click_error:
-                    # Method 2: JavaScript click
-                    try:
-                        self.driver.execute_script("arguments[0].click();", main_wrapper)
-                        clicked = True
-                    except Exception as js_error:
-                        # Method 3: ActionChains click
-                        try:
-                            from selenium.webdriver.common.action_chains import ActionChains
-                            actions = ActionChains(self.driver)
-                            actions.move_to_element(main_wrapper).click().perform()
-                            clicked = True
-                        except Exception as ac_error:
-                            # Method 4: Click using coordinates
-                            try:
-                                from selenium.webdriver.common.action_chains import ActionChains
-                                actions = ActionChains(self.driver)
-                                actions.move_to_element_with_offset(main_wrapper, 0, 0).click().perform()
-                                clicked = True
-                            except Exception as coord_error:
-                                # Method 5: Try JavaScript click with MouseEvent
-                                try:
-                                    self.driver.execute_script("""
-                                        var element = arguments[0];
-                                        var rect = element.getBoundingClientRect();
-                                        var x = rect.left + rect.width / 2;
-                                        var y = rect.top + rect.height / 2;
-                                        var clickEvent = new MouseEvent('click', {
-                                            view: window,
-                                            bubbles: true,
-                                            cancelable: true,
-                                            clientX: x,
-                                            clientY: y
-                                        });
-                                        element.dispatchEvent(clickEvent);
-                                    """, main_wrapper)
-                                    clicked = True
-                                except Exception as js_coord_error:
-                                    pass
-                
-                if clicked:
-                    # Wait for captcha to complete
-                    time.sleep(5)
-                    return True
-                else:
-                    return False
-                    
-            except Exception as e:
-                return False
+            # If we've exhausted all attempts
+            logger.info("No Cloudflare captcha found or unable to click it")
+            return False
                 
         except Exception as e:
+            logger.error(f"Error handling captcha: {str(e)}")
             try:
                 self.driver.switch_to.default_content()
             except:
