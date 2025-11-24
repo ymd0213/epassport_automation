@@ -247,7 +247,7 @@ class Step7PassportPhoto(BaseStep):
                 }
             
             # Wait 15 seconds and check for errors
-            time.sleep(15)
+            time.sleep(20)
             error_result = self.check_for_page_errors()
             if error_result:
                 return error_result

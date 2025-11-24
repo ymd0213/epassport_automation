@@ -156,7 +156,7 @@ class UndetectedWebAutomation:
             logger.error(f"Failed to get page info: {str(e)}")
             return None
     
-    def handle_cloudflare_captcha(self, timeout=30):
+    def handle_cloudflare_captcha(self, timeout=60):
         """
         Locate the Cloudflare captcha by its `main-wrapper` container and click it.
         Returns True once the container disappears (captcha solved) or False if not found.
@@ -440,15 +440,13 @@ def update_application_status(application_id, renewal_status, renewal_error=None
         return False
 
 
-def process_single_application(driver, passport_data, app_index, total_apps):
+def process_single_application(driver, passport_data):
     """
     Process a single passport application through all steps
     
     Args:
         driver: Selenium WebDriver instance
         passport_data: Dictionary containing passport application data (with 'id' and 'data' keys)
-        app_index: Current application index (0-based)
-        total_apps: Total number of applications to process
         
     Returns:
         dict: Dictionary containing success status and results for the application
@@ -475,8 +473,7 @@ def process_single_application(driver, passport_data, app_index, total_apps):
     applicant_name = f"{data.get('first_name', 'Unknown')} {data.get('last_name', 'Unknown')}"
     
     print("\n" + "#"*70)
-    print(f"# PROCESSING APPLICATION {app_index + 1}/{total_apps}")
-    print(f"# Application ID: {application_id}")
+    print(f"# PROCESSING APPLICATION ID: {application_id}")
     print(f"# Applicant: {applicant_name}")
     print("#"*70)
     
@@ -540,7 +537,7 @@ def process_single_application(driver, passport_data, app_index, total_apps):
         
         # Print summary for this application
         print("\n" + "="*50)
-        print(f"SUMMARY FOR APPLICATION {app_index + 1}: {applicant_name}")
+        print(f"SUMMARY FOR APPLICATION ID {application_id}: {applicant_name}")
         print("="*50)
         
         # Display executed steps
@@ -557,7 +554,7 @@ def process_single_application(driver, passport_data, app_index, total_apps):
         
         # Determine overall status and update backend
         if failed_step:
-            print(f"\n❌ APPLICATION {app_index + 1} FAILED AT STEP {failed_step}")
+            print(f"\n❌ APPLICATION ID {application_id} FAILED AT STEP {failed_step}")
             print(f"Error: {failed_error['code']} - {failed_error['message']}")
             print("="*50)
             
@@ -575,7 +572,7 @@ def process_single_application(driver, passport_data, app_index, total_apps):
                 'results': results
             }
         else:
-            print(f"\n🎉 APPLICATION {app_index + 1} COMPLETED SUCCESSFULLY!")
+            print(f"\n🎉 APPLICATION ID {application_id} COMPLETED SUCCESSFULLY!")
             print("="*50)
             
             # Update backend with success status and renewal application ID
@@ -592,8 +589,8 @@ def process_single_application(driver, passport_data, app_index, total_apps):
             }
         
     except Exception as e:
-        logger.error(f"Error processing application {app_index + 1}: {str(e)}")
-        print(f"❌ Error processing application {app_index + 1}: {str(e)}")
+        logger.error(f"Error processing application ID {application_id}: {str(e)}")
+        print(f"❌ Error processing application ID {application_id}: {str(e)}")
         
         # Update backend with exception error
         # For exceptions, determine which step we were on based on results
@@ -619,17 +616,17 @@ def process_single_application(driver, passport_data, app_index, total_apps):
         }
 
 
-def process_application_in_process(passport_data, app_number, props):
+def process_application_in_process(passport_data, props):
     """
     Process a single application in a separate process
     
     Args:
         passport_data: Dictionary containing passport application data
-        app_number: Application number for display purposes
         props: Properties for the application (method, error_code)
     """
     process_id = multiprocessing.current_process().name
-    print(f"\n🚀 [{process_id}] Process started for application #{app_number}")
+    application_id = passport_data.get('id', 'Unknown')
+    print(f"\n🚀 [{process_id}] Process started for application ID: {application_id}")
     
     # Create automation instance for this process
     automation = UndetectedWebAutomation(headless=False)
@@ -660,7 +657,7 @@ def process_application_in_process(passport_data, app_number, props):
         if page_info:
             print(f"📄 [{process_id}] Page Title: {page_info['title']}")
         
-        time.sleep(5)
+        time.sleep(10)
         
         # Handle Cloudflare captcha if present
         print(f"\n🔍 [{process_id}] Checking for Cloudflare captcha...")
@@ -678,20 +675,18 @@ def process_application_in_process(passport_data, app_number, props):
         print(f"\n🚀 [{process_id}] Starting application processing...")
         app_results = process_single_application(
             automation.driver, 
-            passport_data, 
-            app_number - 1,  # 0-based index
-            app_number  # Display as total
+            passport_data
         )
         
         # Print result
         if app_results.get('success', False):
-            print(f"\n✅ [{process_id}] Application #{app_number} completed successfully!")
+            print(f"\n✅ [{process_id}] Application ID {application_id} completed successfully!")
         else:
-            print(f"\n❌ [{process_id}] Application #{app_number} failed")
+            print(f"\n❌ [{process_id}] Application ID {application_id} failed")
         
     except Exception as e:
-        logger.error(f"[{process_id}] Error in process: {str(e)}")
-        print(f"❌ [{process_id}] Error in process: {str(e)}")
+        logger.error(f"[{process_id}] Error in process for application ID {application_id}: {str(e)}")
+        print(f"❌ [{process_id}] Error in process for application ID {application_id}: {str(e)}")
     
     finally:
         # Close the browser and cleanup
@@ -798,14 +793,14 @@ def main():
                 # Create and start the process
                 process = multiprocessing.Process(
                     target=process_application_in_process,
-                    args=(passport_data, total_processed, props),
+                    args=(passport_data, props),
                     name=process_name,
                     daemon=True  # Daemon process will exit when main program exits
                 )
                 process.start()
                 active_processes.append(process)
                 
-                print(f"✅ Process '{process_name}' started for application #{total_processed}")
+                print(f"✅ Process '{process_name}' started for application ID {application_id}")
                 print(f"📊 Active processes: {len(active_processes)}/{MAX_PROCESSES}")
                 
                 # Wait 20 seconds before polling again
