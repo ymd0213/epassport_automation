@@ -629,7 +629,8 @@ def process_application_in_process(passport_data, app_number, props):
         props: Properties for the application (method, error_code)
     """
     process_id = multiprocessing.current_process().name
-    print(f"\n🚀 [{process_id}] Process started for application #{app_number}")
+    application_id = passport_data.get('id', 'Unknown')
+    print(f"\n🚀 [{process_id}] Process started for application ID: {application_id}")
     
     # Create automation instance for this process
     automation = UndetectedWebAutomation(headless=False)
@@ -685,13 +686,13 @@ def process_application_in_process(passport_data, app_number, props):
         
         # Print result
         if app_results.get('success', False):
-            print(f"\n✅ [{process_id}] Application #{app_number} completed successfully!")
+            print(f"\n✅ [{process_id}] Application ID {application_id} completed successfully!")
         else:
-            print(f"\n❌ [{process_id}] Application #{app_number} failed")
+            print(f"\n❌ [{process_id}] Application ID {application_id} failed")
         
     except Exception as e:
-        logger.error(f"[{process_id}] Error in process: {str(e)}")
-        print(f"❌ [{process_id}] Error in process: {str(e)}")
+        logger.error(f"[{process_id}] Error in process for application ID {application_id}: {str(e)}")
+        print(f"❌ [{process_id}] Error in process for application ID {application_id}: {str(e)}")
     
     finally:
         # Close the browser and cleanup
