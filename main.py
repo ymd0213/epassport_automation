@@ -12,8 +12,7 @@ import os
 import json
 import requests
 import argparse
-import threading
-from urllib.parse import urlparse
+import multiprocessing
 from dotenv import load_dotenv
 
 from steps.step1_landing_page import Step1LandingPage
@@ -38,111 +37,15 @@ logger = logging.getLogger(__name__)
 
 
 class UndetectedWebAutomation:
-    def __init__(self, headless=False, use_shared_proxy=True, shared_proxy_port=8888):
+    def __init__(self, headless=False):
         """
         Initialize the UndetectedWebAutomation class
         
         Args:
             headless (bool): Run browser in headless mode
-            use_shared_proxy (bool): Use shared proxy server (don't create own)
-            shared_proxy_port (int): Port of the shared proxy server
         """
         self.driver = None
         self.headless = headless
-        self.proxy_url = None
-        self.proxy_host = None
-        self.proxy_port = None
-        self.proxy_username = None
-        self.proxy_password = None
-        self.proxy_server = None
-        self.use_shared_proxy = use_shared_proxy
-        self.shared_proxy_port = shared_proxy_port
-        self.load_proxy_config()
-    
-    def load_proxy_config(self):
-        """Load and parse proxy configuration from environment variables"""
-        try:
-            # Load environment variables
-            load_dotenv()
-            
-            # Method 1: Try to get proxy URL from single environment variable
-            self.proxy_url = os.getenv('PROXY_URL')
-            
-            if self.proxy_url:
-                # Parse the proxy URL
-                parsed = urlparse(self.proxy_url)
-                
-                self.proxy_host = parsed.hostname
-                self.proxy_port = parsed.port
-                self.proxy_username = parsed.username
-                self.proxy_password = parsed.password
-                
-                # Determine the scheme (http, https, socks5, etc.)
-                scheme = parsed.scheme if parsed.scheme else 'http'
-                
-            else:
-                # Method 2: Try to get proxy configuration from separate variables
-                self.proxy_host = os.getenv('PROXY_HOST')
-                self.proxy_port = os.getenv('PROXY_PORT')
-                self.proxy_username = os.getenv('PROXY_USERNAME')
-                self.proxy_password = os.getenv('PROXY_PASSWORD')
-                
-                if self.proxy_host and self.proxy_port:
-                    # Convert port to integer
-                    try:
-                        self.proxy_port = int(self.proxy_port)
-                    except ValueError:
-                        logger.error(f"Invalid PROXY_PORT value: {self.proxy_port}")
-                        self.proxy_host = None
-                        return
-                    
-                    # Build proxy_url for compatibility
-                    scheme = 'http'  # Default to http
-                    if self.proxy_username and self.proxy_password:
-                        self.proxy_url = f"{scheme}://{self.proxy_username}:{self.proxy_password}@{self.proxy_host}:{self.proxy_port}"
-                    else:
-                        self.proxy_url = f"{scheme}://{self.proxy_host}:{self.proxy_port}"
-                
-        except Exception as e:
-            logger.error(f"Error loading proxy configuration: {str(e)}")
-            self.proxy_url = None
-            self.proxy_host = None
-    
-    def start_local_proxy_server(self):
-        """Start local proxy server for authentication (only if not using shared proxy)"""
-        try:
-            # If using shared proxy, skip creating our own server
-            if self.use_shared_proxy:
-                return True
-            
-            from proxy_server import ProxyServer
-            
-            print(f"🔌 Starting local proxy server on port {self.shared_proxy_port}...")
-            self.proxy_server = ProxyServer(local_host='127.0.0.1', local_port=self.shared_proxy_port)
-            self.proxy_server.start()
-            
-            # Wait a moment for server to start
-            time.sleep(1)
-            
-            print(f"✅ Local proxy server started on port {self.shared_proxy_port}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to start local proxy server: {str(e)}")
-            return False
-    
-    def stop_local_proxy_server(self):
-        """Stop local proxy server (only if not using shared proxy)"""
-        # If using shared proxy, don't stop it (main thread will handle that)
-        if self.use_shared_proxy:
-            return
-        
-        if self.proxy_server:
-            try:
-                self.proxy_server.stop()
-                self.proxy_server = None
-            except Exception as e:
-                pass
     
     def get_chrome_version(self):
         """Get Chrome browser version"""
@@ -164,17 +67,6 @@ class UndetectedWebAutomation:
         if self.headless:
             options.add_argument("--headless")
         
-        # Add proxy configuration if available
-        if self.proxy_host and self.proxy_port:
-            if self.proxy_username and self.proxy_password:
-                # Authenticated proxy - use local proxy server (no auth popup)
-                # Use the shared proxy port
-                options.add_argument(f"--proxy-server=http://127.0.0.1:{self.shared_proxy_port}")
-            else:
-                # Non-authenticated proxy - direct connection
-                proxy_server = f"http://{self.proxy_host}:{self.proxy_port}"
-                options.add_argument(f"--proxy-server={proxy_server}")
-        
         # Additional options for better performance
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
@@ -193,12 +85,6 @@ class UndetectedWebAutomation:
         Setup undetected Chrome WebDriver with auto-downloaded ChromeDriver
         """
         try:
-            # Start local proxy server if authenticated proxy is configured
-            if self.proxy_host and self.proxy_username and self.proxy_password:
-                if not self.start_local_proxy_server():
-                    logger.error("Failed to start local proxy server")
-                    return False
-            
             # Get Chrome version for better compatibility
             chrome_version = self.get_chrome_version()
             if chrome_version:
@@ -272,122 +158,69 @@ class UndetectedWebAutomation:
     
     def handle_cloudflare_captcha(self, timeout=30):
         """
-        Handle Cloudflare v2 captcha by clicking the checkbox if present
-        
-        Args:
-            timeout (int): Maximum time to wait for captcha to appear and complete (default: 30 seconds)
-            
-        Returns:
-            bool: True if captcha was found and clicked, False if no captcha found
+        Locate the Cloudflare captcha by its `main-wrapper` container and click it.
+        Returns True once the container disappears (captcha solved) or False if not found.
         """
         try:
             from selenium.webdriver.common.by import By
-            from selenium.webdriver.support.ui import WebDriverWait
-            from selenium.webdriver.support import expected_conditions as EC
             
-            # Wait a moment for page to fully load
-            time.sleep(2)
+            end_time = time.time() + timeout
+            attempt = 0
             
-            # Look for main-wrapper element that contains the Cloudflare captcha
-            main_wrapper = None
-            max_attempts = 6  # Check every 2 seconds for up to 12 seconds
-            check_interval = 2
-            
-            for attempt in range(max_attempts):
-                if attempt > 0:
-                    time.sleep(check_interval)
+            while time.time() < end_time:
+                attempt += 1
+                if attempt > 1:
+                    logger.info(f"Captcha click attempt {attempt}")
                 
                 try:
-                    # Try to find main-wrapper element
-                    main_wrappers = self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper[role='main']")
-                    if not main_wrappers:
-                        # Also try without role='main' attribute
-                        main_wrappers = self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper")
+                    wrappers = self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper[role='main']")
+                    if not wrappers:
+                        wrappers = self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper")
                     
-                    if main_wrappers:
-                        for wrapper in main_wrappers:
-                            try:
-                                if wrapper.is_displayed():
-                                    main_wrapper = wrapper
-                                    break
-                            except Exception as e:
-                                continue
-                        
-                        if main_wrapper:
-                            break
-                except Exception as e:
+                    visible_wrapper = next((w for w in wrappers if w.is_displayed()), None)
+                    if not visible_wrapper:
+                        time.sleep(1.5)
+                        continue
+                    
+                    try:
+                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", visible_wrapper)
+                        time.sleep(0.5)
+                        try:
+                            visible_wrapper.click()
+                        except Exception:
+                            self.driver.execute_script("arguments[0].click();", visible_wrapper)
+                        logger.info("Clicked Cloudflare captcha main-wrapper")
+                    except Exception as click_error:
+                        logger.warning(f"Failed to click captcha wrapper: {click_error}")
+                        time.sleep(1)
+                        continue
+                    
+                    time.sleep(4)
+                    
+                    remaining = [
+                        w for w in self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper")
+                        if w.is_displayed()
+                    ]
+                    if not remaining:
+                        logger.info("Captcha resolved; main-wrapper no longer visible")
+                        return True
+                    
+                    logger.info("Captcha still present; retrying...")
+                    time.sleep(1.5)
+                
+                except Exception as inner_error:
+                    logger.warning(f"Captcha attempt failed: {inner_error}")
+                    time.sleep(1.5)
                     continue
             
-            if not main_wrapper:
-                return False
-            
-            # Click the main-wrapper element
-            try:
-                # Scroll into view
-                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", main_wrapper)
-                time.sleep(1)
-                
-                # Try multiple click methods
-                clicked = False
-                
-                # Method 1: Regular click
-                try:
-                    main_wrapper.click()
-                    clicked = True
-                except Exception as click_error:
-                    # Method 2: JavaScript click
-                    try:
-                        self.driver.execute_script("arguments[0].click();", main_wrapper)
-                        clicked = True
-                    except Exception as js_error:
-                        # Method 3: ActionChains click
-                        try:
-                            from selenium.webdriver.common.action_chains import ActionChains
-                            actions = ActionChains(self.driver)
-                            actions.move_to_element(main_wrapper).click().perform()
-                            clicked = True
-                        except Exception as ac_error:
-                            # Method 4: Click using coordinates
-                            try:
-                                from selenium.webdriver.common.action_chains import ActionChains
-                                actions = ActionChains(self.driver)
-                                actions.move_to_element_with_offset(main_wrapper, 0, 0).click().perform()
-                                clicked = True
-                            except Exception as coord_error:
-                                # Method 5: Try JavaScript click with MouseEvent
-                                try:
-                                    self.driver.execute_script("""
-                                        var element = arguments[0];
-                                        var rect = element.getBoundingClientRect();
-                                        var x = rect.left + rect.width / 2;
-                                        var y = rect.top + rect.height / 2;
-                                        var clickEvent = new MouseEvent('click', {
-                                            view: window,
-                                            bubbles: true,
-                                            cancelable: true,
-                                            clientX: x,
-                                            clientY: y
-                                        });
-                                        element.dispatchEvent(clickEvent);
-                                    """, main_wrapper)
-                                    clicked = True
-                                except Exception as js_coord_error:
-                                    pass
-                
-                if clicked:
-                    # Wait for captcha to complete
-                    time.sleep(5)
-                    return True
-                else:
-                    return False
-                    
-            except Exception as e:
-                return False
-                
+            logger.info("Timed out waiting for Cloudflare captcha")
+            return False
+        
         except Exception as e:
+            logger.error(f"Error handling captcha: {str(e)}")
             try:
                 self.driver.switch_to.default_content()
-            except:
+            except Exception:
                 pass
             return False
     
@@ -400,9 +233,6 @@ class UndetectedWebAutomation:
             logger.error(f"Error closing WebDriver: {str(e)}")
         finally:
             self.driver = None
-            
-            # Stop local proxy server if running
-            self.stop_local_proxy_server()
     
 
 
@@ -789,64 +619,63 @@ def process_single_application(driver, passport_data, app_index, total_apps):
         }
 
 
-def process_application_in_thread(passport_data, app_number, props, shared_proxy_port=8888):
+def process_application_in_process(passport_data, app_number, props):
     """
-    Process a single application in a separate thread
+    Process a single application in a separate process
     
     Args:
         passport_data: Dictionary containing passport application data
         app_number: Application number for display purposes
         props: Properties for the application (method, error_code)
-        shared_proxy_port: Port of the shared proxy server
     """
-    thread_id = threading.current_thread().name
-    print(f"\n🧵 [{thread_id}] Thread started for application #{app_number}")
+    process_id = multiprocessing.current_process().name
+    print(f"\n🚀 [{process_id}] Process started for application #{app_number}")
     
-    # Create automation instance for this thread (using shared proxy)
-    automation = UndetectedWebAutomation(headless=False, use_shared_proxy=True, shared_proxy_port=shared_proxy_port)
+    # Create automation instance for this process
+    automation = UndetectedWebAutomation(headless=False)
     
     try:
         # Target URL
         target_url = "https://opr.travel.state.gov/"
         
         # Setup driver
-        print(f"🧵 [{thread_id}] Setting up browser...")
+        print(f"🚀 [{process_id}] Setting up browser...")
         if not automation.setup_driver():
-            print(f"❌ [{thread_id}] Failed to setup browser")
+            print(f"❌ [{process_id}] Failed to setup browser")
             return
         
-        print(f"✅ [{thread_id}] Browser setup successful!")
+        print(f"✅ [{process_id}] Browser setup successful!")
         time.sleep(1)
         
         # Navigate to the URL
-        print(f"🧵 [{thread_id}] Navigating to {target_url}...")
+        print(f"🚀 [{process_id}] Navigating to {target_url}...")
         if not automation.navigate_to_url(target_url):
-            print(f"❌ [{thread_id}] Failed to navigate to {target_url}")
+            print(f"❌ [{process_id}] Failed to navigate to {target_url}")
             return
             
-        print(f"✅ [{thread_id}] Successfully navigated to {target_url}")
+        print(f"✅ [{process_id}] Successfully navigated to {target_url}")
         
         # Get page information
         page_info = automation.get_page_info()
         if page_info:
-            print(f"📄 [{thread_id}] Page Title: {page_info['title']}")
+            print(f"📄 [{process_id}] Page Title: {page_info['title']}")
         
         time.sleep(5)
         
         # Handle Cloudflare captcha if present
-        print(f"\n🔍 [{thread_id}] Checking for Cloudflare captcha...")
+        print(f"\n🔍 [{process_id}] Checking for Cloudflare captcha...")
         captcha_found = automation.handle_cloudflare_captcha()
         if captcha_found:
-            print(f"✅ [{thread_id}] Cloudflare captcha was found and clicked")
+            print(f"✅ [{process_id}] Cloudflare captcha was found and clicked")
         else:
-            print(f"ℹ️  [{thread_id}] No Cloudflare captcha found - proceeding normally")
+            print(f"ℹ️  [{process_id}] No Cloudflare captcha found - proceeding normally")
         
         # Wait 10 seconds after initial navigation
-        print(f"\n⏳ [{thread_id}] Waiting 10 seconds after initial navigation...")
+        print(f"\n⏳ [{process_id}] Waiting 10 seconds after initial navigation...")
         time.sleep(10)
         
         # Process the application
-        print(f"\n🚀 [{thread_id}] Starting application processing...")
+        print(f"\n🚀 [{process_id}] Starting application processing...")
         app_results = process_single_application(
             automation.driver, 
             passport_data, 
@@ -856,25 +685,25 @@ def process_application_in_thread(passport_data, app_number, props, shared_proxy
         
         # Print result
         if app_results.get('success', False):
-            print(f"\n✅ [{thread_id}] Application #{app_number} completed successfully!")
+            print(f"\n✅ [{process_id}] Application #{app_number} completed successfully!")
         else:
-            print(f"\n❌ [{thread_id}] Application #{app_number} failed")
+            print(f"\n❌ [{process_id}] Application #{app_number} failed")
         
     except Exception as e:
-        logger.error(f"[{thread_id}] Error in thread: {str(e)}")
-        print(f"❌ [{thread_id}] Error in thread: {str(e)}")
+        logger.error(f"[{process_id}] Error in process: {str(e)}")
+        print(f"❌ [{process_id}] Error in process: {str(e)}")
     
     finally:
         # Close the browser and cleanup
-        print(f"\n🧹 [{thread_id}] Closing browser and cleaning up...")
+        print(f"\n🧹 [{process_id}] Closing browser and cleaning up...")
         automation.close_driver()
-        print(f"✅ [{thread_id}] Thread completed and browser closed")
+        print(f"✅ [{process_id}] Process completed and browser closed")
 
 
 def main():
-    """Main function to poll API and create threads for each application"""
+    """Main function to poll API and create processes for each application"""
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Undetected ChromeDriver Web Automation with Threading')
+    parser = argparse.ArgumentParser(description='Undetected ChromeDriver Web Automation with Multiprocessing')
     parser.add_argument(
         '--method',
         type=str,
@@ -902,81 +731,44 @@ def main():
     if args.error_code:
         props['error_code'] = args.error_code
     
-    print("Undetected ChromeDriver Web Automation - Threading Mode")
+    print("Undetected ChromeDriver Web Automation - Multiprocessing Mode")
     print("=" * 70)
     print(f"Processing Method: {args.method}")
     if args.error_code:
         print(f"Error Code: {args.error_code}")
     print("=" * 70)
     print("The system will poll the API every 20 seconds for new applications.")
-    print("Each application will be processed in a separate thread.")
-    print("Maximum concurrent threads: 5")
+    print("Each application will be processed in a separate process.")
+    print("Maximum concurrent processes: 5")
     print("Press Ctrl+C to stop the automation.\n")
     
     # Track statistics
     total_processed = 0
-    active_threads = []
-    shared_proxy_server = None
-    shared_proxy_port = 8888
-    MAX_THREADS = 5  # Maximum number of concurrent threads
-    
-    # Start shared proxy server once (if needed)
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-        
-        # Check if proxy with authentication is configured
-        proxy_url = os.getenv('PROXY_URL')
-        proxy_host = os.getenv('PROXY_HOST')
-        proxy_username = os.getenv('PROXY_USERNAME')
-        proxy_password = os.getenv('PROXY_PASSWORD')
-        
-        needs_proxy = False
-        if proxy_url:
-            from urllib.parse import urlparse
-            parsed = urlparse(proxy_url)
-            if parsed.username and parsed.password:
-                needs_proxy = True
-        elif proxy_host and proxy_username and proxy_password:
-            needs_proxy = True
-        
-        if needs_proxy:
-            print("\n🔌 Starting shared proxy server...")
-            from proxy_server import ProxyServer
-            shared_proxy_server = ProxyServer(local_host='127.0.0.1', local_port=shared_proxy_port)
-            shared_proxy_server.start()
-            time.sleep(1)
-            print(f"✅ Shared proxy server started on port {shared_proxy_port}")
-            print("   All threads will use this single proxy server.\n")
-        else:
-            print("\nℹ️  No authenticated proxy configured - threads will connect directly.\n")
-    except Exception as e:
-        logger.error(f"Failed to start shared proxy server: {str(e)}")
-        print(f"⚠️  Warning: Could not start shared proxy server: {str(e)}")
-        print("   Continuing without proxy...\n")
+    active_processes = []
+    MAX_PROCESSES = 5  # Maximum number of concurrent processes
     
     try:
         # Main polling loop
         while True:
             try:
-                # Clean up finished threads first
-                active_threads = [t for t in active_threads if t.is_alive()]
-                active_count = len(active_threads)
+                # Clean up finished processes first
+                active_processes = [p for p in active_processes if p.is_alive()]
+                active_count = len(active_processes)
                 
                 print("\n" + ">"*70)
-                print(f"📡 Checking thread status...")
-                print(f"📊 Active threads: {active_count}/{MAX_THREADS}")
+                print(f"📡 Checking process status...")
+                print(f"📊 Active processes: {active_count}/{MAX_PROCESSES}")
                 print(">"*70)
                 
-                # Check if we've reached the maximum thread limit
-                if active_count >= MAX_THREADS:
-                    print(f"⏸️  Maximum threads ({MAX_THREADS}) reached. Waiting for a thread to complete...")
+                # Check if we've reached the maximum process limit
+                if active_count >= MAX_PROCESSES:
+                    print(f"⏸️  Maximum processes ({MAX_PROCESSES}) reached. Waiting for a process to complete...")
                     print("⏳ Waiting 20 seconds before next check...")
                     time.sleep(20)
                     continue
                 
                 # We have available slots - fetch new application
-                print(f"✅ Thread slot available ({active_count}/{MAX_THREADS}). Fetching new application...")
+                print(f"✅ Process slot available ({active_count}/{MAX_PROCESSES}). Fetching new application...")
                 passport_data = fetch_single_passport_application(props)
                 
                 if not passport_data:
@@ -997,24 +789,24 @@ def main():
                     time.sleep(20)
                     continue
                 
-                # Create a new thread
+                # Create a new process
                 total_processed += 1
-                thread_name = f"App-{total_processed}"
+                process_name = f"App-{total_processed}"
                 
-                print(f"\n✨ Creating thread '{thread_name}' for application {application_id}...")
+                print(f"\n✨ Creating process '{process_name}' for application {application_id}...")
                 
-                # Create and start the thread
-                thread = threading.Thread(
-                    target=process_application_in_thread,
-                    args=(passport_data, total_processed, props, shared_proxy_port),
-                    name=thread_name,
-                    daemon=True  # Daemon thread will exit when main program exits
+                # Create and start the process
+                process = multiprocessing.Process(
+                    target=process_application_in_process,
+                    args=(passport_data, total_processed, props),
+                    name=process_name,
+                    daemon=True  # Daemon process will exit when main program exits
                 )
-                thread.start()
-                active_threads.append(thread)
+                process.start()
+                active_processes.append(process)
                 
-                print(f"✅ Thread '{thread_name}' started for application #{total_processed}")
-                print(f"📊 Active threads: {len(active_threads)}/{MAX_THREADS}")
+                print(f"✅ Process '{process_name}' started for application #{total_processed}")
+                print(f"📊 Active processes: {len(active_processes)}/{MAX_PROCESSES}")
                 
                 # Wait 20 seconds before polling again
                 print("⏳ Waiting 20 seconds before next API poll...")
@@ -1037,24 +829,15 @@ def main():
         print(f"❌ Critical error occurred: {str(e)}")
     
     finally:
-        # Wait for all active threads to complete
-        if active_threads:
+        # Wait for all active processes to complete
+        if active_processes:
             print("\n" + "="*70)
-            print(f"⏳ Waiting for {len(active_threads)} active thread(s) to complete...")
+            print(f"⏳ Waiting for {len(active_processes)} active process(es) to complete...")
             print("="*70)
-            for thread in active_threads:
-                if thread.is_alive():
-                    print(f"⏳ Waiting for thread '{thread.name}' to complete...")
-                    thread.join(timeout=300)  # Wait up to 5 minutes per thread
-        
-        # Stop shared proxy server
-        if shared_proxy_server:
-            try:
-                print("\n🔌 Stopping shared proxy server...")
-                shared_proxy_server.stop()
-                print("✅ Shared proxy server stopped")
-            except Exception as e:
-                logger.error(f"Error stopping shared proxy server: {str(e)}")
+            for process in active_processes:
+                if process.is_alive():
+                    print(f"⏳ Waiting for process '{process.name}' to complete...")
+                    process.join(timeout=300)  # Wait up to 5 minutes per process
         
         # Print final summary
         print("\n" + "="*70)
@@ -1062,8 +845,13 @@ def main():
         print("="*70)
         print(f"Total Applications Processed: {total_processed}")
         print("="*70)
-        print("\n✅ Automation stopped. All threads have been completed or terminated.")
+        print("\n✅ Automation stopped. All processes have been completed or terminated.")
 
 
 if __name__ == "__main__":
+    # Required for Windows multiprocessing support
+    multiprocessing.freeze_support()
+    # Set spawn method for better cross-platform compatibility
+    # 'spawn' creates a fresh Python interpreter process
+    multiprocessing.set_start_method('spawn', force=True)
     main()

@@ -246,8 +246,8 @@ class Step7PassportPhoto(BaseStep):
                     'message': 'We couldn\'t proceed after uploading your photo. Please try again.'
                 }
             
-            # Wait 2 seconds and check for errors
-            time.sleep(5)
+            # Wait 15 seconds and check for errors
+            time.sleep(15)
             error_result = self.check_for_page_errors()
             if error_result:
                 return error_result
