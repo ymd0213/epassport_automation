@@ -156,7 +156,7 @@ class UndetectedWebAutomation:
             logger.error(f"Failed to get page info: {str(e)}")
             return None
     
-    def handle_cloudflare_captcha(self, timeout=30):
+    def handle_cloudflare_captcha(self, timeout=60):
         """
         Locate the Cloudflare captcha by its `main-wrapper` container and click it.
         Returns True once the container disappears (captcha solved) or False if not found.
@@ -657,7 +657,7 @@ def process_application_in_process(passport_data, props):
         if page_info:
             print(f"📄 [{process_id}] Page Title: {page_info['title']}")
         
-        time.sleep(5)
+        time.sleep(10)
         
         # Handle Cloudflare captcha if present
         print(f"\n🔍 [{process_id}] Checking for Cloudflare captcha...")
