@@ -156,73 +156,126 @@ class UndetectedWebAutomation:
             logger.error(f"Failed to get page info: {str(e)}")
             return None
     
-    def handle_cloudflare_captcha(self, timeout=60):
+    def handle_cloudflare_captcha(self, max_retries=3):
         """
         Locate the Cloudflare captcha by its `main-wrapper` container and click it.
-        Returns True once the container disappears (captcha solved) or False if not found.
+        Retries the entire process up to max_retries times.
+        
+        Flow for each attempt:
+        1. Find and click captcha element
+        2. Wait and verify element disappeared
+        3. Verify URL navigation to target page
+        
+        Returns True if all steps succeed, False otherwise.
         """
-        try:
-            from selenium.webdriver.common.by import By
+        from selenium.webdriver.common.by import By
+        
+        expected_url = "https://opr.travel.state.gov/en/application/onboarding/what-to-expect/"
+        
+        for attempt in range(1, max_retries + 1):
+            logger.info(f"Captcha handling attempt {attempt}/{max_retries}")
             
-            end_time = time.time() + timeout
-            attempt = 0
-            
-            while time.time() < end_time:
-                attempt += 1
-                if attempt > 1:
-                    logger.info(f"Captcha click attempt {attempt}")
+            try:
+                # Check if already at target URL (captcha passed automatically)
+                current_url = self.driver.current_url
+                if expected_url in current_url:
+                    logger.info(f"[Attempt {attempt}] Already at target URL - captcha passed automatically!")
+                    return True
                 
-                try:
-                    wrappers = self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper[role='main']")
-                    if not wrappers:
-                        wrappers = self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper")
+                # STEP 1: Find and click captcha element
+                logger.info(f"[Attempt {attempt}] Step 1: Finding captcha element...")
+                
+                # Try to find the captcha wrapper
+                wrappers = self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper[role='main']")
+                if not wrappers:
+                    wrappers = self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper")
+                
+                visible_wrapper = next((w for w in wrappers if w.is_displayed()), None)
+                
+                if not visible_wrapper:
+                    logger.warning(f"[Attempt {attempt}] No visible captcha element found")
                     
-                    visible_wrapper = next((w for w in wrappers if w.is_displayed()), None)
-                    if not visible_wrapper:
-                        time.sleep(1.5)
-                        continue
-                    
-                    try:
-                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", visible_wrapper)
-                        time.sleep(0.5)
-                        try:
-                            visible_wrapper.click()
-                        except Exception:
-                            self.driver.execute_script("arguments[0].click();", visible_wrapper)
-                        logger.info("Clicked Cloudflare captcha main-wrapper")
-                    except Exception as click_error:
-                        logger.warning(f"Failed to click captcha wrapper: {click_error}")
-                        time.sleep(1)
-                        continue
-                    
-                    time.sleep(4)
-                    
-                    remaining = [
-                        w for w in self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper")
-                        if w.is_displayed()
-                    ]
-                    if not remaining:
-                        logger.info("Captcha resolved; main-wrapper no longer visible")
+                    # Check if URL changed to target (captcha might have passed automatically)
+                    current_url = self.driver.current_url
+                    if expected_url in current_url:
+                        logger.info(f"[Attempt {attempt}] No captcha element but already at target URL - captcha passed!")
                         return True
                     
-                    logger.info("Captcha still present; retrying...")
-                    time.sleep(1.5)
-                
-                except Exception as inner_error:
-                    logger.warning(f"Captcha attempt failed: {inner_error}")
-                    time.sleep(1.5)
+                    time.sleep(2)
                     continue
-            
-            logger.info("Timed out waiting for Cloudflare captcha")
-            return False
+                
+                logger.info(f"[Attempt {attempt}] Captcha element found, attempting to click...")
+                
+                # Scroll into view and click
+                try:
+                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", visible_wrapper)
+                    time.sleep(0.5)
+                    
+                    try:
+                        visible_wrapper.click()
+                    except Exception:
+                        self.driver.execute_script("arguments[0].click();", visible_wrapper)
+                    
+                    logger.info(f"[Attempt {attempt}] Successfully clicked captcha element")
+                except Exception as click_error:
+                    logger.error(f"[Attempt {attempt}] Failed to click captcha: {click_error}")
+                    time.sleep(2)
+                    continue
+                
+                # STEP 2: Wait and verify element disappeared
+                logger.info(f"[Attempt {attempt}] Step 2: Waiting for captcha to be solved...")
+                time.sleep(10)  # Wait for Cloudflare to process
+                
+                logger.info(f"[Attempt {attempt}] Checking if captcha element disappeared...")
+                remaining = [
+                    w for w in self.driver.find_elements(By.CSS_SELECTOR, "div.main-wrapper")
+                    if w.is_displayed()
+                ]
+                
+                if remaining:
+                    logger.warning(f"[Attempt {attempt}] Captcha element still visible after wait")
+                    time.sleep(2)
+                    continue
+                
+                logger.info(f"[Attempt {attempt}] Captcha element disappeared")
+                
+                # STEP 3: Verify URL navigation
+                logger.info(f"[Attempt {attempt}] Step 3: Verifying URL navigation...")
+                
+                # Wait up to 10 seconds for URL to update
+                url_verified = False
+                url_wait_end = time.time() + 10
+                
+                while time.time() < url_wait_end:
+                    current_url = self.driver.current_url
+                    
+                    if expected_url in current_url:
+                        logger.info(f"[Attempt {attempt}] Successfully navigated to expected URL: {current_url}")
+                        url_verified = True
+                        break
+                    
+                    time.sleep(0.5)
+                
+                if not url_verified:
+                    current_url = self.driver.current_url
+                    logger.error(f"[Attempt {attempt}] URL verification failed")
+                    logger.error(f"[Attempt {attempt}] Current URL: {current_url}")
+                    logger.error(f"[Attempt {attempt}] Expected URL: {expected_url}")
+                    time.sleep(2)
+                    continue
+                
+                # ALL STEPS PASSED - SUCCESS!
+                logger.info(f"[Attempt {attempt}] ✅ All steps passed - Captcha solved successfully!")
+                return True
+                
+            except Exception as e:
+                logger.error(f"[Attempt {attempt}] Exception occurred: {str(e)}")
+                time.sleep(2)
+                continue
         
-        except Exception as e:
-            logger.error(f"Error handling captcha: {str(e)}")
-            try:
-                self.driver.switch_to.default_content()
-            except Exception:
-                pass
-            return False
+        # All retries exhausted
+        logger.error(f"❌ Captcha handling failed after {max_retries} attempts")
+        return False
     
     def close_driver(self):
         """Close the WebDriver"""
