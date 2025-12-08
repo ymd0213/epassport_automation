@@ -13,6 +13,7 @@ import json
 import requests
 import argparse
 import multiprocessing
+import random
 from dotenv import load_dotenv
 
 from steps.step1_landing_page import Step1LandingPage
@@ -156,6 +157,101 @@ class UndetectedWebAutomation:
             logger.error(f"Failed to get page info: {str(e)}")
             return None
     
+    def human_like_mouse_movement(self, element):
+        """
+        Simulate human-like mouse movement before clicking an element
+        Moves mouse in a curved path to the element
+        """
+        from selenium.webdriver.common.action_chains import ActionChains
+        
+        try:
+            # Get element location and size
+            location = element.location
+            size = element.size
+            
+            # Calculate center of element
+            target_x = location['x'] + size['width'] / 2
+            target_y = location['y'] + size['height'] / 2
+            
+            # Create action chains
+            action = ActionChains(self.driver)
+            
+            # Random starting position (simulate mouse coming from somewhere)
+            start_offset_x = random.randint(-200, 200)
+            start_offset_y = random.randint(-200, 200)
+            
+            # Move to random starting position first
+            action.move_to_element_with_offset(element, start_offset_x, start_offset_y)
+            action.pause(random.uniform(0.1, 0.3))
+            
+            # Simulate curved movement with multiple intermediate points
+            steps = random.randint(3, 6)
+            for i in range(steps):
+                # Calculate intermediate position with some randomness
+                progress = (i + 1) / steps
+                offset_x = int(start_offset_x * (1 - progress) + random.randint(-10, 10))
+                offset_y = int(start_offset_y * (1 - progress) + random.randint(-10, 10))
+                
+                action.move_to_element_with_offset(element, offset_x, offset_y)
+                action.pause(random.uniform(0.05, 0.15))
+            
+            # Final move to element center
+            action.move_to_element(element)
+            action.pause(random.uniform(0.2, 0.5))
+            
+            # Perform the movement
+            action.perform()
+            
+            logger.info(f"Human-like mouse movement completed in {steps} steps")
+            
+        except Exception as e:
+            logger.warning(f"Human-like mouse movement failed: {str(e)}, will proceed with direct click")
+    
+    def human_delay(self, min_seconds=1.0, max_seconds=3.0):
+        """Random delay to mimic human behavior"""
+        delay = random.uniform(min_seconds, max_seconds)
+        logger.info(f"Human delay: {delay:.2f} seconds")
+        time.sleep(delay)
+    
+    def simulate_human_page_interaction(self):
+        """
+        Simulate human-like page interactions (scrolling, mouse movements)
+        This helps appear more human before interacting with captcha
+        """
+        try:
+            logger.info("Simulating human page interaction...")
+            
+            # Random small scroll movements
+            scroll_amount = random.randint(50, 200)
+            direction = random.choice([1, -1])  # up or down
+            self.driver.execute_script(f"window.scrollBy(0, {scroll_amount * direction});")
+            
+            # Small delay
+            time.sleep(random.uniform(0.3, 0.8))
+            
+            # Scroll back
+            self.driver.execute_script(f"window.scrollBy(0, {-scroll_amount * direction});")
+            
+            # Random delay
+            time.sleep(random.uniform(0.5, 1.0))
+            
+            # Random mouse movements on page
+            from selenium.webdriver.common.action_chains import ActionChains
+            action = ActionChains(self.driver)
+            
+            for _ in range(random.randint(2, 4)):
+                x_offset = random.randint(-100, 100)
+                y_offset = random.randint(-100, 100)
+                action.move_by_offset(x_offset, y_offset)
+                action.pause(random.uniform(0.1, 0.3))
+            
+            action.perform()
+            
+            logger.info("Human page interaction completed")
+            
+        except Exception as e:
+            logger.warning(f"Human page interaction failed: {str(e)}, continuing anyway")
+    
     def handle_cloudflare_captcha(self, max_retries=3):
         """
         Locate the Cloudflare captcha by its `main-wrapper` container and click it.
@@ -182,6 +278,13 @@ class UndetectedWebAutomation:
                     logger.info(f"[Attempt {attempt}] Already at target URL - captcha passed automatically!")
                     return True
                 
+                # Simulate human behavior before interacting with captcha
+                logger.info(f"[Attempt {attempt}] Simulating human behavior on page...")
+                self.simulate_human_page_interaction()
+                
+                # Additional random delay (2-4 seconds) to appear like reading the page
+                self.human_delay(2.0, 4.0)
+                
                 # STEP 1: Find and click captcha element
                 logger.info(f"[Attempt {attempt}] Step 1: Finding captcha element...")
                 
@@ -204,19 +307,33 @@ class UndetectedWebAutomation:
                     time.sleep(2)
                     continue
                 
-                logger.info(f"[Attempt {attempt}] Captcha element found, attempting to click...")
+                logger.info(f"[Attempt {attempt}] Captcha element found, preparing human-like interaction...")
                 
-                # Scroll into view and click
+                # Scroll into view and click with human-like behavior
                 try:
-                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", visible_wrapper)
-                    time.sleep(0.5)
+                    # Smooth scroll into view
+                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});", visible_wrapper)
                     
+                    # Random delay after scrolling (1-2 seconds)
+                    self.human_delay(1.0, 2.0)
+                    
+                    # Human-like mouse movement to captcha
+                    logger.info(f"[Attempt {attempt}] Simulating human-like mouse movement...")
+                    self.human_like_mouse_movement(visible_wrapper)
+                    
+                    # Random delay before click (0.5-1.5 seconds) - simulating "thinking"
+                    self.human_delay(0.5, 1.5)
+                    
+                    # Click with slight randomness in approach
                     try:
+                        logger.info(f"[Attempt {attempt}] Clicking captcha element...")
                         visible_wrapper.click()
                     except Exception:
+                        # Fallback to JavaScript click if regular click fails
+                        logger.info(f"[Attempt {attempt}] Regular click failed, using JavaScript click...")
                         self.driver.execute_script("arguments[0].click();", visible_wrapper)
                     
-                    logger.info(f"[Attempt {attempt}] Successfully clicked captcha element")
+                    logger.info(f"[Attempt {attempt}] Successfully clicked captcha element with human-like behavior")
                 except Exception as click_error:
                     logger.error(f"[Attempt {attempt}] Failed to click captcha: {click_error}")
                     time.sleep(2)
