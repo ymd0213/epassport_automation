@@ -13,6 +13,7 @@ import json
 import requests
 import argparse
 import multiprocessing
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 from steps.step1_landing_page import Step1LandingPage
@@ -35,6 +36,87 @@ from steps.step15_payment import Step15Payment
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Global proxy server instance (shared across the main process)
+_global_proxy_server = None
+
+
+def start_global_proxy_server():
+    """Start the global proxy server in the main process"""
+    global _global_proxy_server
+    
+    try:
+        # Load environment variables to check if proxy is configured
+        load_dotenv()
+        
+        proxy_host = os.getenv('PROXY_HOST')
+        proxy_url = os.getenv('PROXY_URL')
+        
+        # Check if proxy is configured via URL
+        if proxy_url:
+            parsed = urlparse(proxy_url)
+            proxy_host = parsed.hostname
+        
+        if not proxy_host:
+            print("ℹ️  No proxy configured - skipping proxy server start")
+            return True
+        
+        from proxy_server import ProxyServer
+        
+        print("🚀 Starting global proxy server...")
+        _global_proxy_server = ProxyServer(local_host='127.0.0.1', local_port=8888)
+        _global_proxy_server.start()
+        
+        # Wait a moment for server to start
+        time.sleep(1)
+        
+        print("✅ Global proxy server started on 127.0.0.1:8888")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to start global proxy server: {str(e)}")
+        print(f"❌ Failed to start global proxy server: {str(e)}")
+        return False
+
+
+def stop_global_proxy_server():
+    """Stop the global proxy server"""
+    global _global_proxy_server
+    
+    try:
+        if _global_proxy_server:
+            # Print proxy statistics before stopping
+            stats = _global_proxy_server.get_stats()
+            print("\n" + "="*50)
+            print("📊 GLOBAL PROXY SERVER STATISTICS")
+            print("="*50)
+            print(f"  Proxied connections:  {stats['proxied']:>6} (residential proxy)")
+            print(f"  Bypassed connections: {stats['bypassed']:>6} (direct)")
+            print(f"  Total connections:    {stats['total']:>6}")
+            if stats['total'] > 0:
+                bypass_pct = (stats['bypassed'] / stats['total']) * 100
+                print(f"  Bypass rate:          {bypass_pct:>6.1f}%")
+            print("="*50)
+            
+            _global_proxy_server.stop()
+            _global_proxy_server = None
+            print("✅ Global proxy server stopped")
+    except Exception as e:
+        logger.error(f"Error stopping global proxy server: {str(e)}")
+
+
+def enable_global_proxy():
+    """Enable proxy mode - route through residential proxy (for captcha)"""
+    global _global_proxy_server
+    if _global_proxy_server:
+        _global_proxy_server.enable_proxy()
+
+
+def disable_global_proxy():
+    """Disable proxy mode - all connections go direct (after captcha passed)"""
+    global _global_proxy_server
+    if _global_proxy_server:
+        _global_proxy_server.disable_proxy()
+
 
 class UndetectedWebAutomation:
     def __init__(self, headless=False):
@@ -46,6 +128,63 @@ class UndetectedWebAutomation:
         """
         self.driver = None
         self.headless = headless
+        self.proxy_url = None
+        self.proxy_host = None
+        self.proxy_port = None
+        self.proxy_username = None
+        self.proxy_password = None
+        self.load_proxy_config()
+    
+    def load_proxy_config(self):
+        """Load and parse proxy configuration from environment variables"""
+        try:
+            # Load environment variables
+            load_dotenv()
+            
+            # Method 1: Try to get proxy URL from single environment variable
+            self.proxy_url = os.getenv('PROXY_URL')
+            
+            if self.proxy_url:
+                # Parse the proxy URL
+                parsed = urlparse(self.proxy_url)
+                
+                self.proxy_host = parsed.hostname
+                self.proxy_port = parsed.port
+                self.proxy_username = parsed.username
+                self.proxy_password = parsed.password
+                
+            else:
+                # Method 2: Try to get proxy configuration from separate variables
+                self.proxy_host = os.getenv('PROXY_HOST')
+                self.proxy_port = os.getenv('PROXY_PORT')
+                self.proxy_username = os.getenv('PROXY_USERNAME')
+                self.proxy_password = os.getenv('PROXY_PASSWORD')
+                
+                if self.proxy_host and self.proxy_port:
+                    # Convert port to integer
+                    try:
+                        self.proxy_port = int(self.proxy_port)
+                    except ValueError:
+                        logger.error(f"Invalid PROXY_PORT value: {self.proxy_port}")
+                        self.proxy_host = None
+                        return
+                    
+                    # Build proxy_url for compatibility
+                    scheme = 'http'  # Default to http
+                    if self.proxy_username and self.proxy_password:
+                        self.proxy_url = f"{scheme}://{self.proxy_username}:{self.proxy_password}@{self.proxy_host}:{self.proxy_port}"
+                    else:
+                        self.proxy_url = f"{scheme}://{self.proxy_host}:{self.proxy_port}"
+            
+            if self.proxy_host:
+                print(f"🔧 Proxy configured: {self.proxy_host}:{self.proxy_port}")
+            else:
+                print("ℹ️  No proxy configured - using direct connection")
+                        
+        except Exception as e:
+            logger.error(f"Error loading proxy configuration: {str(e)}")
+            self.proxy_url = None
+            self.proxy_host = None
     
     def get_chrome_version(self):
         """Get Chrome browser version"""
@@ -78,11 +217,18 @@ class UndetectedWebAutomation:
         options.add_argument("--disable-infobars")
         options.add_argument("--disable-notifications")
         
+        # Configure proxy if available (use local proxy server)
+        if self.proxy_host:
+            # Point Chrome to local proxy server which handles authentication
+            options.add_argument("--proxy-server=http://127.0.0.1:8888")
+            print("🔒 Chrome configured to use local proxy server (127.0.0.1:8888)")
+        
         return options
     
     def setup_driver(self):
         """
         Setup undetected Chrome WebDriver with auto-downloaded ChromeDriver
+        Note: Local proxy server should be started separately in the main process
         """
         try:
             # Get Chrome version for better compatibility
@@ -278,7 +424,7 @@ class UndetectedWebAutomation:
         return False
     
     def close_driver(self):
-        """Close the WebDriver"""
+        """Close the WebDriver and cleanup resources"""
         try:
             if self.driver:
                 self.driver.quit()
@@ -790,6 +936,11 @@ def main():
     print("Maximum concurrent processes: 5")
     print("Press Ctrl+C to stop the automation.\n")
     
+    # Start global proxy server (runs once in main process, shared by all child processes)
+    if not start_global_proxy_server():
+        print("❌ Failed to start proxy server. Exiting...")
+        return
+    
     # Track statistics
     total_processed = 0
     active_processes = []
@@ -886,6 +1037,9 @@ def main():
                 if process.is_alive():
                     print(f"⏳ Waiting for process '{process.name}' to complete...")
                     process.join(timeout=300)  # Wait up to 5 minutes per process
+        
+        # Stop global proxy server
+        stop_global_proxy_server()
         
         # Print final summary
         print("\n" + "="*70)

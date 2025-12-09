@@ -29,6 +29,12 @@ class ProxyServer:
         # Only this domain will be routed through the residential proxy
         self.target_domain = os.getenv('TARGET_DOMAIN', 'opr.travel.state.gov')
         
+        # Proxy mode control
+        # "proxy" = route target domain through residential proxy (for captcha)
+        # "direct" = bypass proxy for all domains (after captcha passed)
+        self.mode_lock = threading.Lock()
+        self._proxy_enabled = True  # Start with proxy enabled for captcha
+        
         # Statistics tracking
         self.stats_lock = threading.Lock()
         self.proxied_count = 0
@@ -43,7 +49,7 @@ class ProxyServer:
         print(f"  Upstream: {self.proxy_host}:{self.proxy_port}")
         print(f"  Auth: {self.proxy_username}:***")
         print(f"  Target Domain (proxied): {self.target_domain}")
-        print(f"  Other domains: Direct connection (bypassed)")
+        print(f"  Mode: Proxy enabled (for captcha)")
     
     def start(self):
         """Start the proxy server in a background thread"""
@@ -74,6 +80,23 @@ class ProxyServer:
                 'total': self.proxied_count + self.bypassed_count
             }
     
+    def enable_proxy(self):
+        """Enable proxy mode - route target domain through residential proxy"""
+        with self.mode_lock:
+            self._proxy_enabled = True
+        print("🔒 Proxy mode ENABLED - routing through residential proxy")
+    
+    def disable_proxy(self):
+        """Disable proxy mode - all connections go direct (bypass proxy)"""
+        with self.mode_lock:
+            self._proxy_enabled = False
+        print("⚡ Proxy mode DISABLED - all connections direct")
+    
+    def is_proxy_enabled(self):
+        """Check if proxy mode is enabled"""
+        with self.mode_lock:
+            return self._proxy_enabled
+    
     def _run(self):
         """Main server loop"""
         while self.running:
@@ -98,6 +121,11 @@ class ProxyServer:
         Returns:
             bool: True if should use proxy, False if should bypass (direct connection)
         """
+        # Check if proxy mode is enabled
+        with self.mode_lock:
+            if not self._proxy_enabled:
+                return False  # Proxy disabled, all connections go direct
+        
         # Extract hostname without port
         hostname = host.split(':')[0]
         
