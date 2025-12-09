@@ -126,15 +126,18 @@ class ProxyServer:
             if not self._proxy_enabled:
                 return False  # Proxy disabled, all connections go direct
         
-        # Extract hostname without port
-        hostname = host.split(':')[0]
+        # TESTING: Proxy mask commented out - all traffic goes through proxy when enabled
+        return True
         
-        # Check if hostname matches target domain
-        # Support exact match and subdomain matching
-        if hostname == self.target_domain or hostname.endswith('.' + self.target_domain):
-            return True
-        
-        return False
+        # # Extract hostname without port
+        # hostname = host.split(':')[0]
+        # 
+        # # Check if hostname matches target domain
+        # # Support exact match and subdomain matching
+        # if hostname == self.target_domain or hostname.endswith('.' + self.target_domain):
+        #     return True
+        # 
+        # return False
     
     def _handle_client(self, client_socket):
         """Handle a client connection"""
