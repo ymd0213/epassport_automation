@@ -126,18 +126,26 @@ class ProxyServer:
             if not self._proxy_enabled:
                 return False  # Proxy disabled, all connections go direct
         
-        # TESTING: Proxy mask commented out - all traffic goes through proxy when enabled
-        return True
+        # Extract hostname without port
+        hostname = host.split(':')[0].lower()
         
-        # # Extract hostname without port
-        # hostname = host.split(':')[0]
-        # 
-        # # Check if hostname matches target domain
-        # # Support exact match and subdomain matching
-        # if hostname == self.target_domain or hostname.endswith('.' + self.target_domain):
-        #     return True
-        # 
-        # return False
+        # Cloudflare-related domains to route through proxy
+        cloudflare_domains = [
+            'cloudflare.com',
+            'challenges.cloudflare.com',
+            'cloudflareinsights.com',
+            'cloudflare-dns.com',
+            'cloudflareclient.com',
+            'cloudflarestream.com',
+            'cloudflaressl.com',
+        ]
+        
+        # Check if hostname matches any Cloudflare domain
+        for cf_domain in cloudflare_domains:
+            if hostname == cf_domain or hostname.endswith('.' + cf_domain):
+                return True
+        
+        return False
     
     def _handle_client(self, client_socket):
         """Handle a client connection"""
