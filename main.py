@@ -57,24 +57,17 @@ def start_global_proxy_server():
             proxy_host = parsed.hostname
         
         if not proxy_host:
-            print("ℹ️  No proxy configured - skipping proxy server start")
             return True
         
         from proxy_server import ProxyServer
         
-        print("🚀 Starting global proxy server...")
         _global_proxy_server = ProxyServer(local_host='127.0.0.1', local_port=8888)
         _global_proxy_server.start()
-        
-        # Wait a moment for server to start
         time.sleep(1)
-        
-        print("✅ Global proxy server started on 127.0.0.1:8888")
         return True
         
     except Exception as e:
         logger.error(f"Failed to start global proxy server: {str(e)}")
-        print(f"❌ Failed to start global proxy server: {str(e)}")
         return False
 
 
@@ -84,22 +77,8 @@ def stop_global_proxy_server():
     
     try:
         if _global_proxy_server:
-            # Print proxy statistics before stopping
-            stats = _global_proxy_server.get_stats()
-            print("\n" + "="*50)
-            print("📊 GLOBAL PROXY SERVER STATISTICS")
-            print("="*50)
-            print(f"  Proxied connections:  {stats['proxied']:>6} (residential proxy)")
-            print(f"  Bypassed connections: {stats['bypassed']:>6} (direct)")
-            print(f"  Total connections:    {stats['total']:>6}")
-            if stats['total'] > 0:
-                bypass_pct = (stats['bypassed'] / stats['total']) * 100
-                print(f"  Bypass rate:          {bypass_pct:>6.1f}%")
-            print("="*50)
-            
             _global_proxy_server.stop()
             _global_proxy_server = None
-            print("✅ Global proxy server stopped")
     except Exception as e:
         logger.error(f"Error stopping global proxy server: {str(e)}")
 
@@ -176,10 +155,6 @@ class UndetectedWebAutomation:
                     else:
                         self.proxy_url = f"{scheme}://{self.proxy_host}:{self.proxy_port}"
             
-            if self.proxy_host:
-                print(f"🔧 Proxy configured: {self.proxy_host}:{self.proxy_port}")
-            else:
-                print("ℹ️  No proxy configured - using direct connection")
                         
         except Exception as e:
             logger.error(f"Error loading proxy configuration: {str(e)}")
@@ -219,9 +194,7 @@ class UndetectedWebAutomation:
         
         # Configure proxy if available (use local proxy server)
         if self.proxy_host:
-            # Point Chrome to local proxy server which handles authentication
             options.add_argument("--proxy-server=http://127.0.0.1:8888")
-            print("🔒 Chrome configured to use local proxy server (127.0.0.1:8888)")
         
         return options
     
@@ -938,7 +911,6 @@ def main():
     
     # Start global proxy server (runs once in main process, shared by all child processes)
     if not start_global_proxy_server():
-        print("❌ Failed to start proxy server. Exiting...")
         return
     
     # Track statistics

@@ -44,12 +44,6 @@ class ProxyServer:
         credentials = f"{self.proxy_username}:{self.proxy_password}"
         self.auth_header = f"Proxy-Authorization: Basic {base64.b64encode(credentials.encode()).decode()}\r\n"
         
-        print(f"Proxy Server Configuration:")
-        print(f"  Local: {self.local_host}:{self.local_port}")
-        print(f"  Upstream: {self.proxy_host}:{self.proxy_port}")
-        print(f"  Auth: {self.proxy_username}:***")
-        print(f"  Target Domain (proxied): {self.target_domain}")
-        print(f"  Mode: Proxy enabled (for captcha)")
     
     def start(self):
         """Start the proxy server in a background thread"""
@@ -62,14 +56,12 @@ class ProxyServer:
         thread = threading.Thread(target=self._run, daemon=True)
         thread.start()
         
-        print(f"✅ Proxy server started on {self.local_host}:{self.local_port}")
     
     def stop(self):
         """Stop the proxy server"""
         self.running = False
         if self.server_socket:
             self.server_socket.close()
-        print("Proxy server stopped")
     
     def get_stats(self):
         """Get current statistics"""
@@ -84,13 +76,11 @@ class ProxyServer:
         """Enable proxy mode - route target domain through residential proxy"""
         with self.mode_lock:
             self._proxy_enabled = True
-        print("🔒 Proxy mode ENABLED - routing through residential proxy")
     
     def disable_proxy(self):
         """Disable proxy mode - all connections go direct (bypass proxy)"""
         with self.mode_lock:
             self._proxy_enabled = False
-        print("⚡ Proxy mode DISABLED - all connections direct")
     
     def is_proxy_enabled(self):
         """Check if proxy mode is enabled"""
@@ -172,8 +162,8 @@ class ProxyServer:
             else:
                 self._handle_http(client_socket, request)
                 
-        except Exception as e:
-            print(f"Error handling client: {e}")
+        except Exception:
+            pass
         finally:
             client_socket.close()
     
@@ -187,7 +177,6 @@ class ProxyServer:
             # Check if this domain should use the proxy
             if self._should_use_proxy(target):
                 # Route through residential proxy
-                print(f"🔒 Routing through proxy: {target}")
                 with self.stats_lock:
                     self.proxied_count += 1
                 
@@ -213,7 +202,6 @@ class ProxyServer:
                     self._forward_data(client_socket, proxy_socket)
             else:
                 # Bypass proxy - make direct connection
-                print(f"⚡ Direct connection (bypassed): {target}")
                 with self.stats_lock:
                     self.bypassed_count += 1
                 
@@ -231,8 +219,8 @@ class ProxyServer:
                 # Start bidirectional forwarding
                 self._forward_data(client_socket, target_socket)
             
-        except Exception as e:
-            print(f"Error in CONNECT: {e}")
+        except Exception:
+            pass
     
     def _handle_http(self, client_socket, request):
         """Handle regular HTTP request"""
@@ -259,14 +247,12 @@ class ProxyServer:
                         host = parsed.netloc
             
             if not host:
-                # Cannot determine host, default to direct connection
-                print(f"⚠️  Cannot determine host for HTTP request, closing connection")
+                # Cannot determine host, close connection
                 return
             
             # Check if this domain should use the proxy
             if self._should_use_proxy(host):
                 # Route through residential proxy
-                print(f"🔒 Routing through proxy: {host} (HTTP)")
                 with self.stats_lock:
                     self.proxied_count += 1
                 
@@ -291,7 +277,6 @@ class ProxyServer:
                     client_socket.sendall(data)
             else:
                 # Bypass proxy - make direct connection
-                print(f"⚡ Direct connection (bypassed): {host} (HTTP)")
                 with self.stats_lock:
                     self.bypassed_count += 1
                 
@@ -317,8 +302,8 @@ class ProxyServer:
                         break
                     client_socket.sendall(data)
             
-        except Exception as e:
-            print(f"Error in HTTP: {e}")
+        except Exception:
+            pass
     
     def _forward_data(self, socket1, socket2):
         """Bidirectional data forwarding between two sockets"""
@@ -347,42 +332,9 @@ if __name__ == "__main__":
     server = ProxyServer()
     server.start()
     
-    print("\nProxy server running. Press Ctrl+C to stop...")
-    print("Statistics will be displayed every 30 seconds.\n")
-    
     try:
-        last_stats_time = time.time()
         while True:
             time.sleep(1)
-            
-            # Display statistics every 30 seconds
-            if time.time() - last_stats_time >= 30:
-                stats = server.get_stats()
-                print("\n" + "="*50)
-                print("📊 PROXY STATISTICS")
-                print("="*50)
-                print(f"  Proxied connections:  {stats['proxied']:>6} (residential proxy)")
-                print(f"  Bypassed connections: {stats['bypassed']:>6} (direct)")
-                print(f"  Total connections:    {stats['total']:>6}")
-                if stats['total'] > 0:
-                    bypass_pct = (stats['bypassed'] / stats['total']) * 100
-                    print(f"  Bypass rate:          {bypass_pct:>6.1f}%")
-                print("="*50 + "\n")
-                last_stats_time = time.time()
-                
     except KeyboardInterrupt:
-        print("\n")
-        stats = server.get_stats()
-        print("="*50)
-        print("📊 FINAL STATISTICS")
-        print("="*50)
-        print(f"  Proxied connections:  {stats['proxied']:>6} (residential proxy)")
-        print(f"  Bypassed connections: {stats['bypassed']:>6} (direct)")
-        print(f"  Total connections:    {stats['total']:>6}")
-        if stats['total'] > 0:
-            bypass_pct = (stats['bypassed'] / stats['total']) * 100
-            print(f"  Bypass rate:          {bypass_pct:>6.1f}%")
-        print("="*50 + "\n")
         server.stop()
-        print("Stopped")
 
