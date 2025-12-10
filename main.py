@@ -752,7 +752,19 @@ def process_single_application(driver, passport_data):
                 print(f"Renewal Application ID: {renewal_application_id}")
                 update_application_status(application_id, "5", renewal_application_id=renewal_application_id)
             else:
-                update_application_status(application_id, "5")
+                # No renewal_application_id means we couldn't scrape it from confirmation page - treat as failure
+                print("❌ Could not retrieve renewal application ID from confirmation page")
+                failed_error = {
+                    'code': 'STEP15_RENEWAL_ID_MISSING',
+                    'message': 'Payment was submitted but could not retrieve confirmation number.'
+                }
+                update_application_status(application_id, "3", failed_error)
+                return {
+                    'success': False,
+                    'failed_step': 15,
+                    'error': failed_error,
+                    'results': results
+                }
             
             return {
                 'success': True,
