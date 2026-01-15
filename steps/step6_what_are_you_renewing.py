@@ -210,14 +210,13 @@ class Step6WhatAreYouRenewing(BaseStep):
                     logger.error("Failed to input passport card ID")
                     return False
                 
-                # Passport card issue date (using same date fields as book for now)
-                recent_card_issued_day = str(self.passport_data.get('recent_book_issued_day', ''))
+                recent_card_issued_day = str(self.passport_data.get('recent_card_issued_day', ''))
                 if recent_card_issued_day:
                     if not self.find_and_input_text(self.passport_card_issue_day, recent_card_issued_day, "passport card issue day"):
                         logger.error("Failed to input passport card issue day")
                         return False
                 
-                recent_card_issued_month = str(self.passport_data.get('recent_book_issued_month', ''))
+                recent_card_issued_month = str(self.passport_data.get('recent_card_issued_month', ''))
                 if recent_card_issued_month:
                     # Select passport card issue month (data is 1-12, but option values are 0-11)
                     month_value = str(int(recent_card_issued_month) - 1)  # Convert 1-12 to 0-11
@@ -225,7 +224,7 @@ class Step6WhatAreYouRenewing(BaseStep):
                         logger.error("Failed to select passport card issue month")
                         return False
                 
-                recent_card_issued_year = str(self.passport_data.get('recent_book_issued_year', ''))
+                recent_card_issued_year = str(self.passport_data.get('recent_card_issued_year', ''))
                 if recent_card_issued_year:
                     if not self.find_and_input_text(self.passport_card_issue_year, recent_card_issued_year, "passport card issue year"):
                         logger.error("Failed to input passport card issue year")
