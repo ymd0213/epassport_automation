@@ -678,7 +678,7 @@ class Step8PersonalInformation(BaseStep):
             phone_number = self.passport_data.get('phone_number', '')
             if phone_number:
                 # Remove dashes from phone number
-                phone_number = phone_number.replace('-', '')
+                phone_number = re.sub(r'[^0-9]', '', phone_number)
                 if not self.find_and_input_text(self.phone_number, phone_number, "phone number"):
                     logger.error("Failed to input phone number")
                     return False
@@ -853,6 +853,9 @@ class Step8PersonalInformation(BaseStep):
             # City of birth
             city_birth = self.passport_data.get('city_birth', '')
             if city_birth:
+                # Filter to allow only letters, numbers, apostrophes, hyphens, and periods
+                city_birth = re.sub(r'[^a-zA-Z0-9\'-.\s]', '', city_birth)
+                city_birth = re.sub(r'\s*,\s*', ' ', city_birth)
                 if not self.find_and_input_text(self.city_of_birth, city_birth, "city of birth"):
                     logger.error("Failed to input city of birth")
                     return False

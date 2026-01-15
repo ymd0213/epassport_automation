@@ -137,8 +137,6 @@ class Step4UpcomingTravel(BaseStep):
                 logger.error("Failed to click No radio button")
                 return False
             
-            time.sleep(0.5)  # Wait for form to update
-            
             # Validate Continue button before clicking
             logger.info("Validating Continue button...")
             continue_button_element = self.find_element(self.continue_button, "Continue button")
@@ -207,7 +205,7 @@ class Step4UpcomingTravel(BaseStep):
             
             # Wait 2 seconds after clicking button
             logger.info("waiting 2 seconds after clicking Continue...")
-            time.sleep(2)
+            time.sleep(1)
             
             # Check for errors after clicking continue
             logger.info("Checking for errors after clicking Continue...")

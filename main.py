@@ -13,6 +13,7 @@ import json
 import requests
 import argparse
 import multiprocessing
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 from steps.step1_landing_page import Step1LandingPage
@@ -35,6 +36,66 @@ from steps.step15_payment import Step15Payment
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Global proxy server instance (shared across the main process)
+_global_proxy_server = None
+
+
+def start_global_proxy_server():
+    """Start the global proxy server in the main process"""
+    global _global_proxy_server
+    
+    try:
+        # Load environment variables to check if proxy is configured
+        load_dotenv()
+        
+        proxy_host = os.getenv('PROXY_HOST')
+        proxy_url = os.getenv('PROXY_URL')
+        
+        # Check if proxy is configured via URL
+        if proxy_url:
+            parsed = urlparse(proxy_url)
+            proxy_host = parsed.hostname
+        
+        if not proxy_host:
+            return True
+        
+        from proxy_server import ProxyServer
+        
+        _global_proxy_server = ProxyServer(local_host='127.0.0.1', local_port=8888)
+        _global_proxy_server.start()
+        # time.sleep(1)
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to start global proxy server: {str(e)}")
+        return False
+
+
+def stop_global_proxy_server():
+    """Stop the global proxy server"""
+    global _global_proxy_server
+    
+    try:
+        if _global_proxy_server:
+            _global_proxy_server.stop()
+            _global_proxy_server = None
+    except Exception as e:
+        logger.error(f"Error stopping global proxy server: {str(e)}")
+
+
+def enable_global_proxy():
+    """Enable proxy mode - route through residential proxy (for captcha)"""
+    global _global_proxy_server
+    if _global_proxy_server:
+        _global_proxy_server.enable_proxy()
+
+
+def disable_global_proxy():
+    """Disable proxy mode - all connections go direct (after captcha passed)"""
+    global _global_proxy_server
+    if _global_proxy_server:
+        _global_proxy_server.disable_proxy()
+
 
 class UndetectedWebAutomation:
     def __init__(self, headless=False):
@@ -46,6 +107,59 @@ class UndetectedWebAutomation:
         """
         self.driver = None
         self.headless = headless
+        self.proxy_url = None
+        self.proxy_host = None
+        self.proxy_port = None
+        self.proxy_username = None
+        self.proxy_password = None
+        self.load_proxy_config()
+    
+    def load_proxy_config(self):
+        """Load and parse proxy configuration from environment variables"""
+        try:
+            # Load environment variables
+            load_dotenv()
+            
+            # Method 1: Try to get proxy URL from single environment variable
+            self.proxy_url = os.getenv('PROXY_URL')
+            
+            if self.proxy_url:
+                # Parse the proxy URL
+                parsed = urlparse(self.proxy_url)
+                
+                self.proxy_host = parsed.hostname
+                self.proxy_port = parsed.port
+                self.proxy_username = parsed.username
+                self.proxy_password = parsed.password
+                
+            else:
+                # Method 2: Try to get proxy configuration from separate variables
+                self.proxy_host = os.getenv('PROXY_HOST')
+                self.proxy_port = os.getenv('PROXY_PORT')
+                self.proxy_username = os.getenv('PROXY_USERNAME')
+                self.proxy_password = os.getenv('PROXY_PASSWORD')
+                
+                if self.proxy_host and self.proxy_port:
+                    # Convert port to integer
+                    try:
+                        self.proxy_port = int(self.proxy_port)
+                    except ValueError:
+                        logger.error(f"Invalid PROXY_PORT value: {self.proxy_port}")
+                        self.proxy_host = None
+                        return
+                    
+                    # Build proxy_url for compatibility
+                    scheme = 'http'  # Default to http
+                    if self.proxy_username and self.proxy_password:
+                        self.proxy_url = f"{scheme}://{self.proxy_username}:{self.proxy_password}@{self.proxy_host}:{self.proxy_port}"
+                    else:
+                        self.proxy_url = f"{scheme}://{self.proxy_host}:{self.proxy_port}"
+            
+                        
+        except Exception as e:
+            logger.error(f"Error loading proxy configuration: {str(e)}")
+            self.proxy_url = None
+            self.proxy_host = None
     
     def get_chrome_version(self):
         """Get Chrome browser version"""
@@ -78,11 +192,16 @@ class UndetectedWebAutomation:
         options.add_argument("--disable-infobars")
         options.add_argument("--disable-notifications")
         
+        # Configure proxy if available (use local proxy server)
+        if self.proxy_host:
+            options.add_argument("--proxy-server=http://127.0.0.1:8888")
+        
         return options
     
     def setup_driver(self):
         """
         Setup undetected Chrome WebDriver with auto-downloaded ChromeDriver
+        Note: Local proxy server should be started separately in the main process
         """
         try:
             # Get Chrome version for better compatibility
@@ -156,7 +275,7 @@ class UndetectedWebAutomation:
             logger.error(f"Failed to get page info: {str(e)}")
             return None
     
-    def handle_cloudflare_captcha(self, max_retries=3):
+    def handle_cloudflare_captcha(self, max_retries = 5):
         """
         Locate the Cloudflare captcha by its `main-wrapper` container and click it.
         Retries the entire process up to max_retries times.
@@ -201,7 +320,7 @@ class UndetectedWebAutomation:
                         logger.info(f"[Attempt {attempt}] No captcha element but already at target URL - captcha passed!")
                         return True
                     
-                    time.sleep(2)
+                    time.sleep(1)
                     continue
                 
                 logger.info(f"[Attempt {attempt}] Captcha element found, attempting to click...")
@@ -209,7 +328,7 @@ class UndetectedWebAutomation:
                 # Scroll into view and click
                 try:
                     self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", visible_wrapper)
-                    time.sleep(0.5)
+                    time.sleep(1)
                     
                     try:
                         visible_wrapper.click()
@@ -219,12 +338,12 @@ class UndetectedWebAutomation:
                     logger.info(f"[Attempt {attempt}] Successfully clicked captcha element")
                 except Exception as click_error:
                     logger.error(f"[Attempt {attempt}] Failed to click captcha: {click_error}")
-                    time.sleep(2)
+                    time.sleep(1)
                     continue
                 
                 # STEP 2: Wait and verify element disappeared
                 logger.info(f"[Attempt {attempt}] Step 2: Waiting for captcha to be solved...")
-                time.sleep(10)  # Wait for Cloudflare to process
+                time.sleep(5)  # Wait for Cloudflare to process
                 
                 logger.info(f"[Attempt {attempt}] Checking if captcha element disappeared...")
                 remaining = [
@@ -233,24 +352,24 @@ class UndetectedWebAutomation:
                 ]
                 
                 if remaining:
-                    logger.warning(f"[Attempt {attempt}] Captcha element still visible after wait")
-                    time.sleep(2)
+                    # logger.warning(f"[Attempt {attempt}] Captcha element still visible after wait")
+                    time.sleep(1)
                     continue
                 
-                logger.info(f"[Attempt {attempt}] Captcha element disappeared")
+                # logger.info(f"[Attempt {attempt}] Captcha element disappeared")
                 
                 # STEP 3: Verify URL navigation
-                logger.info(f"[Attempt {attempt}] Step 3: Verifying URL navigation...")
+                # logger.info(f"[Attempt {attempt}] Step 3: Verifying URL navigation...")
                 
-                # Wait up to 10 seconds for URL to update
+                # Wait up to 5 seconds for URL to update
                 url_verified = False
-                url_wait_end = time.time() + 10
+                url_wait_end = time.time() + 5
                 
                 while time.time() < url_wait_end:
                     current_url = self.driver.current_url
                     
                     if expected_url in current_url:
-                        logger.info(f"[Attempt {attempt}] Successfully navigated to expected URL: {current_url}")
+                        # logger.info(f"[Attempt {attempt}] Successfully navigated to expected URL: {current_url}")
                         url_verified = True
                         break
                     
@@ -259,8 +378,8 @@ class UndetectedWebAutomation:
                 if not url_verified:
                     current_url = self.driver.current_url
                     logger.error(f"[Attempt {attempt}] URL verification failed")
-                    logger.error(f"[Attempt {attempt}] Current URL: {current_url}")
-                    logger.error(f"[Attempt {attempt}] Expected URL: {expected_url}")
+                    # logger.error(f"[Attempt {attempt}] Current URL: {current_url}")
+                    # logger.error(f"[Attempt {attempt}] Expected URL: {expected_url}")
                     time.sleep(2)
                     continue
                 
@@ -278,7 +397,7 @@ class UndetectedWebAutomation:
         return False
     
     def close_driver(self):
-        """Close the WebDriver"""
+        """Close the WebDriver and cleanup resources"""
         try:
             if self.driver:
                 self.driver.quit()
@@ -405,7 +524,13 @@ def fetch_single_passport_application(props=None):
                     'data': parsed_data,
                     'billing_info': application.get('billing_info'),
                     'photo_url': application.get('photo_url'),
-                    'ai_photo_url': application.get('ai_photo_url')
+                    'ai_photo_url': application.get('ai_photo_url'),
+                    'user_ai_photo_url': application.get('user_ai_photo_url'),
+                    'card_holder': application.get('card_holder'),
+                    'card_num': application.get('card_num'),
+                    'card_exp': application.get('card_exp'),
+                    'card_cvv': application.get('card_cvv'),
+                    'card_zip': application.get('card_zip')
                 }
             else:
                 return None
@@ -518,6 +643,18 @@ def process_single_application(driver, passport_data):
     
     if 'ai_photo_url' in passport_data:
         data['ai_photo_url'] = passport_data['ai_photo_url']
+    if 'user_ai_photo_url' in passport_data:
+        data['user_ai_photo_url'] = passport_data['user_ai_photo_url']
+    if 'card_holder' in passport_data:
+        data['card_holder'] = passport_data['card_holder']
+    if 'card_num' in passport_data:
+        data['card_num'] = passport_data['card_num']
+    if 'card_exp' in passport_data:
+        data['card_exp'] = passport_data['card_exp']
+    if 'card_cvv' in passport_data:
+        data['card_cvv'] = passport_data['card_cvv']
+    if 'card_zip' in passport_data:
+        data['card_zip'] = passport_data['card_zip']
     
     # Add application_id to data for database updates
     data['application_id'] = application_id
@@ -633,7 +770,19 @@ def process_single_application(driver, passport_data):
                 print(f"Renewal Application ID: {renewal_application_id}")
                 update_application_status(application_id, "5", renewal_application_id=renewal_application_id)
             else:
-                update_application_status(application_id, "5")
+                # No renewal_application_id means we couldn't scrape it from confirmation page - treat as failure
+                print("❌ Could not retrieve renewal application ID from confirmation page")
+                failed_error = {
+                    'code': 'STEP15_RENEWAL_ID_MISSING',
+                    'message': 'Payment was submitted but could not retrieve confirmation number.'
+                }
+                update_application_status(application_id, "3", failed_error)
+                return {
+                    'success': False,
+                    'failed_step': 15,
+                    'error': failed_error,
+                    'results': results
+                }
             
             return {
                 'success': True,
@@ -714,11 +863,20 @@ def process_application_in_process(passport_data, props):
         
         # Handle Cloudflare captcha if present
         print(f"\n🔍 [{process_id}] Checking for Cloudflare captcha...")
-        captcha_found = automation.handle_cloudflare_captcha()
-        if captcha_found:
-            print(f"✅ [{process_id}] Cloudflare captcha was found and clicked")
-        else:
-            print(f"ℹ️  [{process_id}] No Cloudflare captcha found - proceeding normally")
+        # captcha_found = automation.handle_cloudflare_captcha()
+        # if captcha_found:
+        #     print(f"✅ [{process_id}] Cloudflare captcha was found and clicked")
+        # else:
+        #     print(f"ℹ️  [{process_id}] No Cloudflare captcha found - proceeding normally")
+
+        captcha_found = False
+        while not captcha_found:
+            captcha_found = automation.handle_cloudflare_captcha()
+            if captcha_found:
+                print(f"✅ [{process_id}] Cloudflare captcha was found and clicked")
+            else:
+                print(f"ℹ️  [{process_id}] No Cloudflare captcha found or not yet handled - retrying...")
+                time.sleep(2)
         
         # Wait 10 seconds after initial navigation
         print(f"\n⏳ [{process_id}] Waiting 10 seconds after initial navigation...")
@@ -790,10 +948,14 @@ def main():
     print("Maximum concurrent processes: 5")
     print("Press Ctrl+C to stop the automation.\n")
     
+    # Start global proxy server (runs once in main process, shared by all child processes)
+    if not start_global_proxy_server():
+        return
+    
     # Track statistics
     total_processed = 0
     active_processes = []
-    MAX_PROCESSES = 5  # Maximum number of concurrent processes
+    MAX_PROCESSES = 2  # Maximum number of concurrent processes
     
     try:
         # Main polling loop
@@ -886,6 +1048,9 @@ def main():
                 if process.is_alive():
                     print(f"⏳ Waiting for process '{process.name}' to complete...")
                     process.join(timeout=300)  # Wait up to 5 minutes per process
+        
+        # Stop global proxy server
+        stop_global_proxy_server()
         
         # Print final summary
         print("\n" + "="*70)
