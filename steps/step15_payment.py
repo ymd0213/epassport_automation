@@ -418,7 +418,20 @@ class Step15Payment(BaseStep):
                     
             except Exception as e:
                 logger.error(f"❌ Could not scrape renewal application number: {str(e)}")
+                page_code = self.get_page_name_code()
+                return {
+                    'status': False,
+                    'code': f'{page_code}_RENEWAL_APP_NUMBER',
+                    'message': 'Could not scrape renewal application number.'
+                }
             
+            if not renewal_application_id:
+                page_code = self.get_page_name_code()
+                return {
+                    'status': False,
+                    'code': f'{page_code}_RENEWAL_APP_NUMBER_MISSING',
+                    'message': 'Renewal application number is missing.'
+                }
             return {
                 'status': True,
                 'code': 'SUCCESS',

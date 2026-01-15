@@ -120,7 +120,7 @@ class ProxyServer:
         hostname = host.split(':')[0].lower()
         
         # Cloudflare-related domains to route through proxy
-        cloudflare_domains = [
+        available_domains = [
             'cloudflare.com',
             'challenges.cloudflare.com',
             'cloudflareinsights.com',
@@ -128,10 +128,11 @@ class ProxyServer:
             'cloudflareclient.com',
             'cloudflarestream.com',
             'cloudflaressl.com',
+            'opr.travel.state.gov'
         ]
         
         # Check if hostname matches any Cloudflare domain
-        for cf_domain in cloudflare_domains:
+        for cf_domain in available_domains:
             if hostname == cf_domain or hostname.endswith('.' + cf_domain):
                 return True
         

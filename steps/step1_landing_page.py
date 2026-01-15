@@ -47,9 +47,9 @@ class Step1LandingPage(BaseStep):
             if success:
                 logger.info("✅ Step 1 completed successfully - Get Started button clicked")
                 
-                # Wait 2 seconds as requested
-                logger.info("waiting 2 seconds...")
-                time.sleep(2)
+                # Wait 1 seconds as requested
+                # logger.info("waiting 1 seconds...")
+                time.sleep(1)
                 
                 return {
                     'status': True,

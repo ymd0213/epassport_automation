@@ -275,7 +275,7 @@ class UndetectedWebAutomation:
             logger.error(f"Failed to get page info: {str(e)}")
             return None
     
-    def handle_cloudflare_captcha(self, max_retries=3):
+    def handle_cloudflare_captcha(self, max_retries = 5):
         """
         Locate the Cloudflare captcha by its `main-wrapper` container and click it.
         Retries the entire process up to max_retries times.
@@ -320,7 +320,7 @@ class UndetectedWebAutomation:
                         logger.info(f"[Attempt {attempt}] No captcha element but already at target URL - captcha passed!")
                         return True
                     
-                    time.sleep(2)
+                    time.sleep(1)
                     continue
                 
                 logger.info(f"[Attempt {attempt}] Captcha element found, attempting to click...")
@@ -328,7 +328,7 @@ class UndetectedWebAutomation:
                 # Scroll into view and click
                 try:
                     self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", visible_wrapper)
-                    time.sleep(0.5)
+                    time.sleep(1)
                     
                     try:
                         visible_wrapper.click()
@@ -338,12 +338,12 @@ class UndetectedWebAutomation:
                     logger.info(f"[Attempt {attempt}] Successfully clicked captcha element")
                 except Exception as click_error:
                     logger.error(f"[Attempt {attempt}] Failed to click captcha: {click_error}")
-                    time.sleep(2)
+                    time.sleep(1)
                     continue
                 
                 # STEP 2: Wait and verify element disappeared
                 logger.info(f"[Attempt {attempt}] Step 2: Waiting for captcha to be solved...")
-                time.sleep(10)  # Wait for Cloudflare to process
+                time.sleep(5)  # Wait for Cloudflare to process
                 
                 logger.info(f"[Attempt {attempt}] Checking if captcha element disappeared...")
                 remaining = [
@@ -352,24 +352,24 @@ class UndetectedWebAutomation:
                 ]
                 
                 if remaining:
-                    logger.warning(f"[Attempt {attempt}] Captcha element still visible after wait")
-                    time.sleep(2)
+                    # logger.warning(f"[Attempt {attempt}] Captcha element still visible after wait")
+                    time.sleep(1)
                     continue
                 
-                logger.info(f"[Attempt {attempt}] Captcha element disappeared")
+                # logger.info(f"[Attempt {attempt}] Captcha element disappeared")
                 
                 # STEP 3: Verify URL navigation
-                logger.info(f"[Attempt {attempt}] Step 3: Verifying URL navigation...")
+                # logger.info(f"[Attempt {attempt}] Step 3: Verifying URL navigation...")
                 
-                # Wait up to 10 seconds for URL to update
+                # Wait up to 5 seconds for URL to update
                 url_verified = False
-                url_wait_end = time.time() + 10
+                url_wait_end = time.time() + 5
                 
                 while time.time() < url_wait_end:
                     current_url = self.driver.current_url
                     
                     if expected_url in current_url:
-                        logger.info(f"[Attempt {attempt}] Successfully navigated to expected URL: {current_url}")
+                        # logger.info(f"[Attempt {attempt}] Successfully navigated to expected URL: {current_url}")
                         url_verified = True
                         break
                     
@@ -378,8 +378,8 @@ class UndetectedWebAutomation:
                 if not url_verified:
                     current_url = self.driver.current_url
                     logger.error(f"[Attempt {attempt}] URL verification failed")
-                    logger.error(f"[Attempt {attempt}] Current URL: {current_url}")
-                    logger.error(f"[Attempt {attempt}] Expected URL: {expected_url}")
+                    # logger.error(f"[Attempt {attempt}] Current URL: {current_url}")
+                    # logger.error(f"[Attempt {attempt}] Expected URL: {expected_url}")
                     time.sleep(2)
                     continue
                 
@@ -845,11 +845,20 @@ def process_application_in_process(passport_data, props):
         
         # Handle Cloudflare captcha if present
         print(f"\n🔍 [{process_id}] Checking for Cloudflare captcha...")
-        captcha_found = automation.handle_cloudflare_captcha()
-        if captcha_found:
-            print(f"✅ [{process_id}] Cloudflare captcha was found and clicked")
-        else:
-            print(f"ℹ️  [{process_id}] No Cloudflare captcha found - proceeding normally")
+        # captcha_found = automation.handle_cloudflare_captcha()
+        # if captcha_found:
+        #     print(f"✅ [{process_id}] Cloudflare captcha was found and clicked")
+        # else:
+        #     print(f"ℹ️  [{process_id}] No Cloudflare captcha found - proceeding normally")
+
+        captcha_found = False
+        while not captcha_found:
+            captcha_found = automation.handle_cloudflare_captcha()
+            if captcha_found:
+                print(f"✅ [{process_id}] Cloudflare captcha was found and clicked")
+            else:
+                print(f"ℹ️  [{process_id}] No Cloudflare captcha found or not yet handled - retrying...")
+                time.sleep(2)
         
         # Wait 10 seconds after initial navigation
         print(f"\n⏳ [{process_id}] Waiting 10 seconds after initial navigation...")
@@ -928,7 +937,7 @@ def main():
     # Track statistics
     total_processed = 0
     active_processes = []
-    MAX_PROCESSES = 5  # Maximum number of concurrent processes
+    MAX_PROCESSES = 3  # Maximum number of concurrent processes
     
     try:
         # Main polling loop
