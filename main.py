@@ -63,7 +63,7 @@ def start_global_proxy_server():
         
         _global_proxy_server = ProxyServer(local_host='127.0.0.1', local_port=8888)
         _global_proxy_server.start()
-        time.sleep(1)
+        # time.sleep(1)
         return True
         
     except Exception as e:
@@ -524,7 +524,13 @@ def fetch_single_passport_application(props=None):
                     'data': parsed_data,
                     'billing_info': application.get('billing_info'),
                     'photo_url': application.get('photo_url'),
-                    'ai_photo_url': application.get('ai_photo_url')
+                    'ai_photo_url': application.get('ai_photo_url'),
+                    'user_ai_photo_url': application.get('user_ai_photo_url'),
+                    'card_holder': application.get('card_holder'),
+                    'card_num': application.get('card_num'),
+                    'card_exp': application.get('card_exp'),
+                    'card_cvv': application.get('card_cvv'),
+                    'card_zip': application.get('card_zip')
                 }
             else:
                 return None
@@ -637,6 +643,18 @@ def process_single_application(driver, passport_data):
     
     if 'ai_photo_url' in passport_data:
         data['ai_photo_url'] = passport_data['ai_photo_url']
+    if 'user_ai_photo_url' in passport_data:
+        data['user_ai_photo_url'] = passport_data['user_ai_photo_url']
+    if 'card_holder' in passport_data:
+        data['card_holder'] = passport_data['card_holder']
+    if 'card_num' in passport_data:
+        data['card_num'] = passport_data['card_num']
+    if 'card_exp' in passport_data:
+        data['card_exp'] = passport_data['card_exp']
+    if 'card_cvv' in passport_data:
+        data['card_cvv'] = passport_data['card_cvv']
+    if 'card_zip' in passport_data:
+        data['card_zip'] = passport_data['card_zip']
     
     # Add application_id to data for database updates
     data['application_id'] = application_id
@@ -937,7 +955,7 @@ def main():
     # Track statistics
     total_processed = 0
     active_processes = []
-    MAX_PROCESSES = 3  # Maximum number of concurrent processes
+    MAX_PROCESSES = 2  # Maximum number of concurrent processes
     
     try:
         # Main polling loop

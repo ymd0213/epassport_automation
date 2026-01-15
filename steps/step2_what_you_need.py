@@ -47,7 +47,7 @@ class Step2WhatYouNeed(BaseStep):
                 
                 # Wait 2 seconds as requested
                 logger.info("waiting 2 seconds...")
-                time.sleep(2)
+                time.sleep(1)
                 
                 return {
                     'status': True,

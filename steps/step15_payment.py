@@ -217,6 +217,37 @@ class Step15Payment(BaseStep):
         except Exception as e:
             logger.error(f"❌ Error selecting card type by index: {str(e)}")
             return False
+
+    def parse_card_exp(self, card_exp):
+        """
+        Parse card expiration date from various formats (MM/YY, MMYY, etc.)
+        
+        Args:
+            card_exp (str): Card expiration in format like "12/25", "1225", etc.
+            
+        Returns:
+            tuple: (month, year) or (None, None) if parsing fails
+        """
+        if not card_exp:
+            return None, None
+        
+        card_exp = str(card_exp).strip()
+        
+        # Handle MM/YY format
+        if '/' in card_exp:
+            parts = card_exp.split('/')
+            if len(parts) == 2:
+                month = parts[0].strip()
+                year = parts[1].strip()
+                return month, year
+        
+        # Handle MMYY format (4 digits)
+        if len(card_exp) == 4 and card_exp.isdigit():
+            month = card_exp[:2]
+            year = card_exp[2:]
+            return month, year
+        
+        return None, None
     
     def execute(self):
         """
@@ -233,6 +264,11 @@ class Step15Payment(BaseStep):
             
             # Get billing info from payment data
             billing_info = self.payment_data.get('billing_info', {})
+            card_holder = self.payment_data.get('card_holder')
+            card_num = self.payment_data.get('card_num')
+            card_exp = self.payment_data.get('card_exp')
+            card_cvv = self.payment_data.get('card_cvv')
+            card_zip = self.payment_data.get('card_zip')
             
             # If billing_info is a string (JSON), parse it
             if isinstance(billing_info, str):
@@ -261,16 +297,35 @@ class Step15Payment(BaseStep):
             missing_fields = [field for field in required_fields if not payment_info.get(field)]
             
             if missing_fields:
-                logger.error(f"Missing required billing fields: {', '.join(missing_fields)}")
-                page_code = self.get_page_name_code()
-                return {
-                    'status': False,
-                    'code': f'{page_code}_BILLING_INFO_INCOMPLETE',
-                    'message': 'Please provide all required payment information.'
+                individual_card_missing = []
+                field_to_card_var = {
+                    'cardholder_name': card_holder,
+                    'cc_number': card_num,
+                    # 'cc_exp_month': card_exp,  # Note: card_exp might need parsing
+                    # 'cc_exp_year': card_exp,   # Note: card_exp might need parsing
+                    'cc_cvv': card_cvv,
+                    # 'payment_option': None  # No direct mapping for 
                 }
+
+                for field in missing_fields:
+                    if field == 'cardholder_name' and not card_holder:
+                        individual_card_missing.append('card_holder')
+                    elif field == 'cc_number' and not card_num:
+                        individual_card_missing.append('card_num')                    
+                    elif field == 'cc_cvv' and not card_cvv:
+                        individual_card_missing.append('card_cvv')
+
+                if individual_card_missing:        
+                    print(f"Missing required billing fields: {', '.join(individual_card_missing)}")
+                    page_code = self.get_page_name_code()
+                    return {
+                        'status': False,
+                        'code': f'{page_code}_BILLING_INFO_INCOMPLETE',
+                        'message': 'Please provide all required payment information.'
+                    }
             
             # Split cardholder name into first and last name
-            cardholder_name = payment_info.get('cardholder_name', '')
+            cardholder_name = payment_info.get('cardholder_name', '') or card_holder or ''
             name_parts = cardholder_name.split(' ', 1)  # Split on first space only
             first_name = name_parts[0] if name_parts else ''
             last_name = name_parts[1] if len(name_parts) > 1 else ''
@@ -288,7 +343,6 @@ class Step15Payment(BaseStep):
                     'code': f'{page_code}_FIRST_NAME_INPUT_FAILED',
                     'message': 'We couldn\'t process your payment information. Please try again.'
                 }
-            time.sleep(0.5)  
             
             # Fill in last name
             logger.info("Filling in account holder last name...")
@@ -300,7 +354,6 @@ class Step15Payment(BaseStep):
                     'code': f'{page_code}_LAST_NAME_INPUT_FAILED',
                     'message': 'We couldn\'t process your payment information. Please try again.'
                 }
-            time.sleep(0.5)  
             
             # Select card type using payment_option as index (not value)
             # Note: First option (index 0) is "Select" placeholder, so we add 1 to skip it
@@ -320,7 +373,7 @@ class Step15Payment(BaseStep):
             time.sleep(0.5)  # 2 second delay after select
             
             # Fill in card number (use custom method to handle auto-formatting)
-            cc_number = str(payment_info.get('cc_number', ''))
+            cc_number = str(payment_info.get('cc_number', '') or card_num or '')
             logger.info("Filling in card number...")
             if not self.input_card_number(cc_number, "card number"):
                 logger.error("Failed to input card number")
@@ -330,10 +383,9 @@ class Step15Payment(BaseStep):
                     'code': f'{page_code}_CARD_NUMBER_INPUT_FAILED',
                     'message': 'We couldn\'t process your payment information. Please try again.'
                 }
-            time.sleep(0.5)  
             
             # Fill in security code
-            cc_cvv = str(payment_info.get('cc_cvv', ''))
+            cc_cvv = str(payment_info.get('cc_cvv', '') or card_cvv or '')
             logger.info("Filling in security code...")
             if not self.find_and_input_text(self.security_code, cc_cvv, "security code"):
                 logger.error("Failed to input security code")
@@ -343,10 +395,14 @@ class Step15Payment(BaseStep):
                     'code': f'{page_code}_SECURITY_CODE_INPUT_FAILED',
                     'message': 'We couldn\'t process your payment information. Please try again.'
                 }
-            time.sleep(0.5)  
             
             # Select expiration month (data is 1-12, but option values are 0-11)
             cc_exp_month = payment_info.get('cc_exp_month', '')
+            if not cc_exp_month and card_exp:
+                parsed_month, _ = self.parse_card_exp(card_exp)
+                if parsed_month:
+                    cc_exp_month = parsed_month
+
             if cc_exp_month:
                 month_value = str(int(cc_exp_month) - 1)  # Convert 1-12 to 0-11
                 logger.info(f"Selecting expiration month: {cc_exp_month} (option value: {month_value})")
@@ -358,11 +414,15 @@ class Step15Payment(BaseStep):
                         'code': f'{page_code}_EXP_MONTH_SELECT_FAILED',
                         'message': 'We couldn\'t process your payment information. Please try again.'
                     }
-            time.sleep(0.5)  # 2 second delay after select
             
             # Fill in expiration year
             cc_exp_year = str(payment_info.get('cc_exp_year', ''))
             logger.info("Filling in expiration year...")
+            if not cc_exp_year and card_exp:
+                _, parsed_year = self.parse_card_exp(card_exp)
+                if parsed_year:
+                    cc_exp_year = parsed_year
+
             if not self.find_and_input_text(self.expiration_year, cc_exp_year, "expiration year"):
                 logger.error("Failed to input expiration year")
                 page_code = self.get_page_name_code()
@@ -371,7 +431,6 @@ class Step15Payment(BaseStep):
                     'code': f'{page_code}_EXP_YEAR_INPUT_FAILED',
                     'message': 'We couldn\'t process your payment information. Please try again.'
                 }
-            time.sleep(0.5)  
             
             # Click Submit Order button
             logger.info("Clicking Submit Order button...")

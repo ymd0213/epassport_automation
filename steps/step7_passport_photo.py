@@ -179,16 +179,24 @@ class Step7PassportPhoto(BaseStep):
             logger.info("Uploading passport photo...")
             
             # Get photo URL from passport data (prioritize ai_photo_url over photo_url)
+            user_ai_photo_url = self.passport_data.get('user_ai_photo_url')
             ai_photo_url = self.passport_data.get('ai_photo_url')
             photo_url = self.passport_data.get('photo_url')
             photo_path = None
             temp_photo_path = None
             
             # Use ai_photo_url if available, otherwise fall back to photo_url
-            url_to_use = ai_photo_url if ai_photo_url else photo_url
+            if user_ai_photo_url:
+                url_to_use = user_ai_photo_url
+            elif ai_photo_url:
+                url_to_use = ai_photo_url
+            else:
+                url_to_use = photo_url
             
             if url_to_use:
-                if ai_photo_url:
+                if user_ai_photo_url:
+                    logger.info(f"User AI photo url provided: {url_to_use}")
+                elif ai_photo_url:
                     logger.info(f"AI Photo URL provided: {url_to_use}")
                 else:
                     logger.info(f"Photo URL provided: {url_to_use}")
