@@ -620,7 +620,7 @@ def update_application_status(application_id, renewal_status, renewal_error=None
 
 def process_single_application(driver, passport_data):
     """
-    Process a single passport application through all steps
+    Process a single passport application through all steps using dynamic page detection
     
     Args:
         driver: Selenium WebDriver instance
@@ -629,6 +629,9 @@ def process_single_application(driver, passport_data):
     Returns:
         dict: Dictionary containing success status and results for the application
     """
+    from page_detector import PageDetector
+    from page_registry import PageRegistry
+    
     # Extract the nested data object
     data = passport_data.get('data', {})
     application_id = passport_data.get('id', 'Unknown')
@@ -667,43 +670,86 @@ def process_single_application(driver, passport_data):
     print(f"# Applicant: {applicant_name}")
     print("#"*70)
     
+    # Initialize page detector and registry
+    page_detector = PageDetector(driver, timeout=10)
+    page_registry = PageRegistry()
+    
     results = {}
     failed_step = None
     failed_error = None
     renewal_application_id = None
+    processed_pages = set()  # Track processed pages to avoid loops
     
     try:
-        # Define all steps with their configurations
-        steps = [
-            {"num": 1, "name": "Landing Page", "class": Step1LandingPage, "params": [driver]},
-            {"num": 2, "name": "What You Need", "class": Step2WhatYouNeed, "params": [driver]},
-            {"num": 3, "name": "Eligibility Requirements", "class": Step3EligibilityRequirements, "params": [driver]},
-            {"num": 4, "name": "Upcoming Travel", "class": Step4UpcomingTravel, "params": [driver, data]},
-            {"num": 5, "name": "Terms and Conditions", "class": Step5TermsAndConditions, "params": [driver]},
-            {"num": 6, "name": "What Are You Renewing", "class": Step6WhatAreYouRenewing, "params": [driver, data]},
-            {"num": 7, "name": "Passport Photo Upload", "class": Step7PassportPhoto, "params": [driver, data]},
-            {"num": 8, "name": "Personal Information", "class": Step8PersonalInformation, "params": [driver, data]},
-            {"num": 9, "name": "Emergency Contact", "class": Step9EmergencyContact, "params": [driver, data]},
-            {"num": 10, "name": "Passport Options", "class": Step10PassportOptions, "params": [driver, data]},
-            {"num": 11, "name": "Mailing Address", "class": Step11MailingAddress, "params": [driver, data]},
-            {"num": 12, "name": "Passport Delivery", "class": Step12PassportDelivery, "params": [driver, data]},
-            {"num": 13, "name": "Review Order", "class": Step13ReviewOrder, "params": [driver, data]},
-            {"num": 14, "name": "Statement of Truth", "class": Step14StatementOfTruth, "params": [driver, data]},
-            {"num": 15, "name": "Payment", "class": Step15Payment, "params": [driver, data]},
-        ]
+        # Detect the initial page
+        current_page_key = page_detector.detect_current_page(max_wait_time=30)
         
-        # Execute each step
-        for step_config in steps:
-            step_num = step_config["num"]
-            step_name = step_config["name"]
+        if not current_page_key:
+            logger.error("❌ Could not detect initial page")
+            failed_error = {
+                "code": "PAGE_DETECTION_FAILED",
+                "message": "Could not identify the current page. Please try again."
+            }
+            update_application_status(application_id, "2", failed_error)
+            return {
+                'success': False,
+                'error': failed_error,
+                'results': results
+            }
+        
+        # Process pages dynamically until we reach confirmation or encounter an error
+        max_iterations = 20  # Safety limit to prevent infinite loops
+        iteration = 0
+        
+        while current_page_key != 'confirmation' and iteration < max_iterations:
+            iteration += 1
+            
+            # Check if we've already processed this page (infinite loop detection)
+            if current_page_key in processed_pages:
+                logger.warning(f"⚠️  Page {current_page_key} already processed - possible loop or re-validation")
+                # Allow processing the same page once more for re-validation scenarios
+                # but track it differently
+            
+            processed_pages.add(current_page_key)
+            
+            # Get step configuration
+            step_config = page_registry.get_step_config(current_page_key)
+            
+            if not step_config:
+                logger.error(f"❌ Unknown page detected: {current_page_key}")
+                failed_error = {
+                    "code": "UNKNOWN_PAGE",
+                    "message": f"Encountered an unknown page: {current_page_key}"
+                }
+                break
+            
+            step_num = step_config['num']
+            step_name = step_config['name']
             step_key = f"step{step_num}"
             
             print("\n" + "="*50)
             print(f"EXECUTING STEP {step_num}: {step_name.upper()}")
+            print(f"Page detected: {current_page_key}")
             print("="*50)
             
-            # Execute step
-            step_instance = step_config["class"](*step_config["params"])
+            # Get step instance
+            step_instance = page_registry.get_step_instance(current_page_key, driver, data)
+            
+            # Handle confirmation page (no step instance needed)
+            if current_page_key == 'confirmation':
+                logger.info("✅ Reached confirmation page!")
+                break
+            
+            if not step_instance:
+                logger.error(f"❌ Could not create step instance for {current_page_key}")
+                failed_error = {
+                    "code": f"STEP{step_num}_INSTANCE_FAILED",
+                    "message": f"Could not initialize step {step_num}"
+                }
+                failed_step = step_num
+                break
+            
+            # Execute the step
             step_result = step_instance.execute()
             
             # Extract result details
@@ -721,20 +767,57 @@ def process_single_application(driver, passport_data):
                     "code": code,
                     "message": message
                 }
-                break  # Stop processing further steps
+                break
             else:
                 print(f"✅ Step {step_num} completed successfully")
+                
+                # Detect the new page after step execution
+                logger.info("🔍 Detecting next page...")
+                new_page_key = page_detector.detect_current_page(max_wait_time=30)
+                
+                if not new_page_key:
+                    logger.error("❌ Could not detect next page after step completion")
+                    failed_step = step_num
+                    failed_error = {
+                        "code": f"STEP{step_num}_NAVIGATION_FAILED",
+                        "message": "Page did not load properly after completing step"
+                    }
+                    break
+                
+                # Update current page
+                if new_page_key != current_page_key:
+                    logger.info(f"✅ Navigated from {current_page_key} to {new_page_key}")
+                    current_page_key = new_page_key
+                else:
+                    logger.info(f"ℹ️  Still on page {current_page_key}")
+                    # If we're still on the same page after execution, break to avoid infinite loop
+                    # This might happen if the step completed but didn't navigate
+                    if current_page_key != 'confirmation':
+                        logger.warning(f"⚠️  Step completed but page did not change from {current_page_key}")
+                        # Continue anyway as some steps might not navigate immediately
+        
+        # Check if we reached max iterations
+        if iteration >= max_iterations:
+            logger.error("❌ Maximum iterations reached - possible infinite loop")
+            failed_error = {
+                "code": "MAX_ITERATIONS_EXCEEDED",
+                "message": "Application processing exceeded maximum iterations"
+            }
+            # Determine last step from results
+            if results:
+                failed_step = max([int(k.replace('step', '')) for k in results.keys() if k.startswith('step')])
+            else:
+                failed_step = 1
         
         # Print summary for this application
         print("\n" + "="*50)
         print(f"SUMMARY FOR APPLICATION ID {application_id}: {applicant_name}")
         print("="*50)
         
-        # Display executed steps
-        for step_config in steps:
-            step_num = step_config["num"]
-            step_name = step_config["name"]
+        # Display executed steps based on results
+        for step_num in range(1, 16):
             step_key = f"step{step_num}"
+            step_name = page_registry.get_step_name(page_registry.step_sequence[step_num - 1]) if step_num <= len(page_registry.step_sequence) else f"Step {step_num}"
             
             if step_key in results:
                 status = '✅ SUCCESS' if results[step_key] else '❌ FAILED'
@@ -859,28 +942,29 @@ def process_application_in_process(passport_data, props):
         if page_info:
             print(f"📄 [{process_id}] Page Title: {page_info['title']}")
         
-        time.sleep(10)
+        # Brief wait for page to stabilize
+        time.sleep(2)
         
         # Handle Cloudflare captcha if present
         print(f"\n🔍 [{process_id}] Checking for Cloudflare captcha...")
-        # captcha_found = automation.handle_cloudflare_captcha()
-        # if captcha_found:
-        #     print(f"✅ [{process_id}] Cloudflare captcha was found and clicked")
-        # else:
-        #     print(f"ℹ️  [{process_id}] No Cloudflare captcha found - proceeding normally")
-
         captcha_found = False
-        while not captcha_found:
+        max_captcha_attempts = 10
+        captcha_attempt = 0
+        
+        while not captcha_found and captcha_attempt < max_captcha_attempts:
+            captcha_attempt += 1
             captcha_found = automation.handle_cloudflare_captcha()
             if captcha_found:
                 print(f"✅ [{process_id}] Cloudflare captcha was found and clicked")
+                time.sleep(3)  # Brief wait after captcha is resolved
             else:
-                print(f"ℹ️  [{process_id}] No Cloudflare captcha found or not yet handled - retrying...")
-                time.sleep(2)
+                if captcha_attempt < max_captcha_attempts:
+                    print(f"ℹ️  [{process_id}] No Cloudflare captcha found or not yet handled - retrying... (Attempt {captcha_attempt}/{max_captcha_attempts})")
+                    time.sleep(2)
+                else:
+                    print(f"ℹ️  [{process_id}] No Cloudflare captcha detected after {max_captcha_attempts} attempts - proceeding with application")
         
-        # Wait 10 seconds after initial navigation
-        print(f"\n⏳ [{process_id}] Waiting 10 seconds after initial navigation...")
-        time.sleep(10)
+        print(f"\n✅ [{process_id}] Page ready for processing (dynamic page detection will handle navigation)")
         
         # Process the application
         print(f"\n🚀 [{process_id}] Starting application processing...")
