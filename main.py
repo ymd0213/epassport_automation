@@ -32,8 +32,8 @@ from steps.step13_review_order import Step13ReviewOrder
 from steps.step14_statement_of_truth import Step14StatementOfTruth
 from steps.step15_payment import Step15Payment
 
-# Configure logging (only errors)
-logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Global proxy server instance (shared across the main process)
