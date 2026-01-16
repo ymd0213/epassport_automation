@@ -8,7 +8,17 @@ import logging
 from .base_step import BaseStep
 
 logger = logging.getLogger(__name__)
+formatter = logging.Formatter(
+    "{asctime} - {levelname} - {message}",
+    style="{",
+    datefmt="%Y-%m-%d %H:%M",
+)
+console_handler = logging.StreamHandler()
+file_handler = logging.FileHandler("app.log", mode="a", encoding="utf-8")
+console_handler.setFormatter(formatter)
 
+logger.addHandler(console_handler)
+logger.addHandler(file_handler)
 
 class Step15Payment(BaseStep):
     """Step 15: Payment page automation"""
@@ -114,7 +124,6 @@ class Step15Payment(BaseStep):
                 if selector:
                     try:
                         input_field = self.wait.until(EC.presence_of_element_located((by, selector)))
-                        logger.info(f"Found {description} using {by}: {selector}")
                         break
                     except:
                         continue
@@ -122,9 +131,7 @@ class Step15Payment(BaseStep):
             if input_field:
                 # Clear existing text and input new text
                 input_field.clear()
-                time.sleep(0.5)
                 input_field.send_keys(text)
-                time.sleep(0.5)
                 
                 # Verify the input - strip spaces for comparison since field auto-formats
                 try:
@@ -134,25 +141,18 @@ class Step15Payment(BaseStep):
                     text_stripped = text.replace(' ', '').replace('-', '')
                     
                     if actual_value_stripped == text_stripped:
-                        logger.info(f"✅ Successfully input card number (formatted as '{actual_value}')")
                         return True
                     else:
-                        logger.warning(f"Card number verification failed: expected '{text}', got '{actual_value}'")
                         # Try one more time
                         input_field.clear()
-                        time.sleep(0.5)
                         input_field.click()
-                        time.sleep(0.5)
                         input_field.send_keys(text)
-                        time.sleep(0.5)
                         actual_value = input_field.get_attribute("value")
                         actual_value_stripped = actual_value.replace(' ', '').replace('-', '')
                         
                         if actual_value_stripped == text_stripped:
-                            logger.info(f"✅ Successfully input card number on retry (formatted as '{actual_value}')")
                             return True
                         else:
-                            logger.error(f"❌ Failed to input card number after retry")
                             return False
                 except Exception as e:
                     logger.warning(f"Could not verify card number input: {str(e)}")
@@ -181,8 +181,6 @@ class Step15Payment(BaseStep):
             from selenium.webdriver.support import expected_conditions as EC
             from selenium.webdriver.support.ui import Select
             
-            logger.info(f"Looking for card type select field...")
-            
             # Try different selector strategies
             selectors = []
             
@@ -200,7 +198,6 @@ class Step15Payment(BaseStep):
                 if selector:
                     try:
                         select_field = self.wait.until(EC.presence_of_element_located((by, selector)))
-                        logger.info(f"Found card type select using {by}: {selector}")
                         break
                     except:
                         continue
@@ -330,11 +327,7 @@ class Step15Payment(BaseStep):
             first_name = name_parts[0] if name_parts else ''
             last_name = name_parts[1] if len(name_parts) > 1 else ''
             
-            logger.info(f"Cardholder name: {cardholder_name}")
-            logger.info(f"First name: {first_name}, Last name: {last_name}")
-            
             # Fill in first name
-            logger.info("Filling in account holder first name...")
             if not self.find_and_input_text(self.first_name, first_name, "first name"):
                 logger.error("Failed to input first name")
                 page_code = self.get_page_name_code()
@@ -345,7 +338,6 @@ class Step15Payment(BaseStep):
                 }
             
             # Fill in last name
-            logger.info("Filling in account holder last name...")
             if not self.find_and_input_text(self.surname, last_name, "last name"):
                 logger.error("Failed to input last name")
                 page_code = self.get_page_name_code()
@@ -359,7 +351,6 @@ class Step15Payment(BaseStep):
             # Note: First option (index 0) is "Select" placeholder, so we add 1 to skip it
             payment_option = payment_info.get('payment_option', '0')
             payment_option_index = int(payment_option) + 1  # Add 1 to skip "Select" option
-            logger.info(f"Selecting card type with index: {payment_option_index} (payment_option: {payment_option})")
             
             # Select by index (not by value) since payment_option represents position in dropdown
             if not self.select_card_type_by_index(payment_option_index):
@@ -374,7 +365,6 @@ class Step15Payment(BaseStep):
             
             # Fill in card number (use custom method to handle auto-formatting)
             cc_number = str(payment_info.get('cc_number', '') or card_num or '')
-            logger.info("Filling in card number...")
             if not self.input_card_number(cc_number, "card number"):
                 logger.error("Failed to input card number")
                 page_code = self.get_page_name_code()
@@ -386,7 +376,6 @@ class Step15Payment(BaseStep):
             
             # Fill in security code
             cc_cvv = str(payment_info.get('cc_cvv', '') or card_cvv or '')
-            logger.info("Filling in security code...")
             if not self.find_and_input_text(self.security_code, cc_cvv, "security code"):
                 logger.error("Failed to input security code")
                 page_code = self.get_page_name_code()
