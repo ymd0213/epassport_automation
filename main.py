@@ -661,12 +661,7 @@ def process_single_application(driver, passport_data):
     
     # Get applicant name for logging
     applicant_name = f"{data.get('first_name', 'Unknown')} {data.get('last_name', 'Unknown')}"
-    
-    print("\n" + "#"*70)
-    print(f"# PROCESSING APPLICATION ID: {application_id}")
-    print(f"# Applicant: {applicant_name}")
-    print("#"*70)
-    
+        
     results = {}
     failed_step = None
     failed_error = None
@@ -697,10 +692,6 @@ def process_single_application(driver, passport_data):
             step_num = step_config["num"]
             step_name = step_config["name"]
             step_key = f"step{step_num}"
-            
-            print("\n" + "="*50)
-            print(f"EXECUTING STEP {step_num}: {step_name.upper()}")
-            print("="*50)
             
             # Execute step
             step_instance = step_config["class"](*step_config["params"])
@@ -830,6 +821,8 @@ def process_application_in_process(passport_data, props):
     application_id = passport_data.get('id', 'Unknown')
     print(f"\n🚀 [{process_id}] Process started for application ID: {application_id}")
     
+    process_id = application_id
+
     # Create automation instance for this process
     automation = UndetectedWebAutomation(headless=False)
     
@@ -838,21 +831,17 @@ def process_application_in_process(passport_data, props):
         target_url = "https://opr.travel.state.gov/"
         
         # Setup driver
-        print(f"🚀 [{process_id}] Setting up browser...")
         if not automation.setup_driver():
             print(f"❌ [{process_id}] Failed to setup browser")
             return
         
-        print(f"✅ [{process_id}] Browser setup successful!")
         time.sleep(1)
         
         # Navigate to the URL
-        print(f"🚀 [{process_id}] Navigating to {target_url}...")
         if not automation.navigate_to_url(target_url):
             print(f"❌ [{process_id}] Failed to navigate to {target_url}")
             return
             
-        print(f"✅ [{process_id}] Successfully navigated to {target_url}")
         
         # Get page information
         page_info = automation.get_page_info()
@@ -937,16 +926,12 @@ def main():
     if args.error_code:
         props['error_code'] = args.error_code
     
-    print("Undetected ChromeDriver Web Automation - Multiprocessing Mode")
+    # print("Undetected ChromeDriver Web Automation - Multiprocessing Mode")
     print("=" * 70)
     print(f"Processing Method: {args.method}")
     if args.error_code:
         print(f"Error Code: {args.error_code}")
     print("=" * 70)
-    print("The system will poll the API every 20 seconds for new applications.")
-    print("Each application will be processed in a separate process.")
-    print("Maximum concurrent processes: 5")
-    print("Press Ctrl+C to stop the automation.\n")
     
     # Start global proxy server (runs once in main process, shared by all child processes)
     if not start_global_proxy_server():
@@ -965,15 +950,9 @@ def main():
                 active_processes = [p for p in active_processes if p.is_alive()]
                 active_count = len(active_processes)
                 
-                print("\n" + ">"*70)
-                print(f"📡 Checking process status...")
-                print(f"📊 Active processes: {active_count}/{MAX_PROCESSES}")
-                print(">"*70)
-                
                 # Check if we've reached the maximum process limit
                 if active_count >= MAX_PROCESSES:
                     print(f"⏸️  Maximum processes ({MAX_PROCESSES}) reached. Waiting for a process to complete...")
-                    print("⏳ Waiting 20 seconds before next check...")
                     time.sleep(20)
                     continue
                 
@@ -983,27 +962,25 @@ def main():
                 
                 if not passport_data:
                     print("⏸️  No application data available from API")
-                    print("⏳ Waiting 20 seconds before next check...")
                     time.sleep(20)
                     continue
                 
                 # Application found - update status immediately to prevent duplicate processing
                 application_id = passport_data.get('id', 'Unknown')
-                print(f"\n📝 Application {application_id} fetched - Updating status to 11 (Processing Started)...")
+                
+                # Update the app status to 11
                 update_success = update_application_status(application_id, "11")
+
                 if update_success:
                     print(f"✅ Application status updated to 11")
                 else:
                     print(f"⚠️  Failed to update application status - skipping this application")
-                    print("⏳ Waiting 20 seconds before next check...")
                     time.sleep(20)
                     continue
                 
                 # Create a new process
                 total_processed += 1
                 process_name = f"App-{total_processed}"
-                
-                print(f"\n✨ Creating process '{process_name}' for application {application_id}...")
                 
                 # Create and start the process
                 process = multiprocessing.Process(
@@ -1014,9 +991,6 @@ def main():
                 )
                 process.start()
                 active_processes.append(process)
-                
-                print(f"✅ Process '{process_name}' started for application ID {application_id}")
-                print(f"📊 Active processes: {len(active_processes)}/{MAX_PROCESSES}")
                 
                 # Wait 20 seconds before polling again
                 print("⏳ Waiting 20 seconds before next API poll...")
@@ -1029,9 +1003,7 @@ def main():
                 break
                 
             except Exception as e:
-                logger.error(f"Error in main polling loop: {str(e)}")
                 print(f"❌ Error in main polling loop: {str(e)}")
-                print("⏳ Waiting 20 seconds before retry...")
                 time.sleep(20)
     
     except Exception as e:
